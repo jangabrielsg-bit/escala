@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestão de Escala - Férias, Folgas e Atestados</title>
+    <!-- Tailwind CSS para estilização rápida e responsiva -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome para ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Estilos personalizados para o calendário */
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 1px;
+            background-color: #334155; /* Cor da borda entre os dias */
+            border: 1px solid #334155;
+        }
+        .calendar-day {
+            background-color: #1e293b;
+            min-height: 100px;
+            padding: 0.5rem;
+        }
+        .calendar-header-day {
+            background-color: #0f172a;
+            text-align: center;
+            font-weight: 600;
+            padding: 0.5rem;
+            font-size: 0.875rem;
+            color: #94a3b8;
+        }
+        /* Ocultar barra de rolagem mas permitir scroll nos dias com muitos itens */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 min-h-screen text-slate-200 font-sans">
+
+    <!-- Cabeçalho -->
+    <header class="bg-slate-800 border-b border-slate-700 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-end items-center">
+            <div class="flex gap-4 text-sm font-medium">
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500 block"></span> Férias</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 block"></span> Folga</span>
+                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-rose-500 block"></span> Atestado</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="flex flex-col lg:flex-row gap-8">
+            
+            <!-- Painel Lateral: Formulário e Lista -->
+            <div class="w-full lg:w-1/3 flex flex-col gap-6">
+                
+                <!-- Formulário de Registro -->
+                <div class="bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700">
+                    <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                        <h2 class="text-lg font-semibold text-slate-200">
+                            <i class="fa-solid fa-plus-circle text-indigo-400 mr-1"></i> Registrar Evento
+                        </h2>
+                        <button onclick="abrirModalEquipe()" type="button" class="text-sm text-indigo-400 hover:text-indigo-300 font-medium bg-indigo-900/30 hover:bg-indigo-900/50 px-3 py-1 rounded transition-colors border border-indigo-800/50">
+                            <i class="fa-solid fa-users-gear mr-1"></i> Equipe
+                        </button>
+                    </div>
+                    <form id="registroForm" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Colaborador</label>
+                            <select id="nome" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="">Selecione um colaborador...</option>
+                                <!-- Opções injetadas via JS -->
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Tipo de Evento</label>
+                            <select id="tipo" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="ferias">Férias</option>
+                                <option value="folga">Folga</option>
+                                <option value="atestado">Atestado Médico</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Data Início</label>
+                                <input type="date" id="dataInicio" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark]">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-1">Data Fim</label>
+                                <input type="date" id="dataFim" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark]">
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full bg-indigo-600 text-white font-medium py-2 px-4 rounded-md hover:bg-indigo-500 transition duration-150 flex justify-center items-center gap-2">
+                            <i class="fa-solid fa-save"></i> Salvar Registro
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Lista de Registros do Mês -->
+                <div class="bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700 flex-grow">
+                    <h2 class="text-lg font-semibold mb-4 text-slate-200 border-b border-slate-700 pb-2">
+                        <i class="fa-solid fa-list text-indigo-400 mr-1"></i> Registros Cadastrados
+                    </h2>
+                    <div id="listaRegistros" class="space-y-3 max-h-64 overflow-y-auto no-scrollbar">
+                        <!-- Itens renderizados via JS -->
+                        <p class="text-sm text-slate-400 text-center py-4">Nenhum registro encontrado.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Painel Principal: Calendário -->
+            <div class="w-full lg:w-2/3 bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-700 flex flex-col">
+                
+                <!-- Controle de Meses -->
+                <div class="bg-slate-900/50 px-6 py-4 flex items-center justify-between border-b border-slate-700">
+                    <button id="btnPrevMonth" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-700 rounded-full transition">
+                        <i class="fa-solid fa-chevron-left text-xl"></i>
+                    </button>
+                    <h2 id="mesAnoAtual" class="text-xl font-bold text-slate-200 capitalize">Maio 2026</h2>
+                    <button id="btnNextMonth" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-700 rounded-full transition">
+                        <i class="fa-solid fa-chevron-right text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Grid do Calendário -->
+                <div class="p-4 flex-grow">
+                    <div class="calendar-grid rounded-lg overflow-hidden border border-slate-700">
+                        <!-- Cabeçalho dos dias da semana -->
+                        <div class="calendar-header-day">Dom</div>
+                        <div class="calendar-header-day">Seg</div>
+                        <div class="calendar-header-day">Ter</div>
+                        <div class="calendar-header-day">Qua</div>
+                        <div class="calendar-header-day">Qui</div>
+                        <div class="calendar-header-day">Sex</div>
+                        <div class="calendar-header-day">Sáb</div>
+                        
+                        <!-- Dias gerados via JS -->
+                        <div id="diasCalendario" class="contents"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal de Gerenciamento de Equipe -->
+    <div id="modalEquipe" class="fixed inset-0 bg-slate-900/80 hidden items-center justify-center z-50 backdrop-blur-sm">
+        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[90vh] border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h3 class="text-lg font-bold text-slate-200"><i class="fa-solid fa-users-gear text-indigo-400 mr-2"></i>Banco de Colaboradores</h3>
+                <button onclick="fecharModalEquipe()" class="text-slate-400 hover:text-slate-200">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 flex-grow overflow-y-auto">
+                <form id="formNovoColaborador" class="flex gap-2 mb-6">
+                    <input type="text" id="novoColaboradorNome" required placeholder="Nome do novo colaborador" class="flex-grow bg-slate-700 border border-slate-600 text-slate-200 placeholder-slate-400 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-500 transition">Adicionar</button>
+                </form>
+
+                <h4 class="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">Equipe Cadastrada</h4>
+                <div id="listaColaboradoresModal" class="space-y-2">
+                    <!-- Lista gerada via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script Principal -->
+    <script>
+        // --- ESTADO DA APLICAÇÃO (Dados em Memória) ---
+        
+        // Banco de dados de colaboradores
+        let colaboradores = [];
+
+        // Aqui guardamos os registros. Inicializamos com alguns dados de exemplo didáticos.
+        let registros = [];
+
+        // Variáveis para controlar o mês exibido
+        let dataAtual = new Date(); // Inicia com a data de hoje
+        let mesAtual = dataAtual.getMonth();
+        let anoAtual = dataAtual.getFullYear();
+
+        // Configuração de cores para os tipos
+        const cores = {
+            ferias: { bg: 'bg-blue-900/40', border: 'border-blue-700/50', text: 'text-blue-300', icon: 'fa-umbrella-beach' },
+            folga: { bg: 'bg-emerald-900/40', border: 'border-emerald-700/50', text: 'text-emerald-300', icon: 'fa-mug-hot' },
+            atestado: { bg: 'bg-rose-900/40', border: 'border-rose-700/50', text: 'text-rose-300', icon: 'fa-notes-medical' }
+        };
+
+        const nomesTipos = {
+            ferias: "Férias",
+            folga: "Folga",
+            atestado: "Atestado"
+        };
+
+        // --- ELEMENTOS DO DOM ---
+        const diasCalendarioEl = document.getElementById('diasCalendario');
+        const mesAnoAtualEl = document.getElementById('mesAnoAtual');
+        const listaRegistrosEl = document.getElementById('listaRegistros');
+        const registroForm = document.getElementById('registroForm');
+        
+        // Novos elementos para equipe
+        const selectNomeEl = document.getElementById('nome');
+        const modalEquipeEl = document.getElementById('modalEquipe');
+        const listaColaboradoresModalEl = document.getElementById('listaColaboradoresModal');
+        const formNovoColaboradorEl = document.getElementById('formNovoColaborador');
+
+        // --- FUNÇÕES AUXILIARES ---
+        // Formata uma data para o padrão YYYY-MM-DD
+        function formatarDataISO(ano, mes, dia) {
+            return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+        }
+
+        // Formata YYYY-MM-DD para DD/MM/YYYY para exibição
+        function formatarDataBr(dataISO) {
+            const partes = dataISO.split('-');
+            return `${partes[2]}/${partes[1]}/${partes[0]}`;
+        }
+
+        // --- LÓGICA DO CALENDÁRIO ---
+        function renderizarCalendario() {
+            diasCalendarioEl.innerHTML = '';
+            
+            // Obter o primeiro dia da semana no mês (0 = Dom, 1 = Seg...)
+            const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
+            // Obter o número total de dias no mês
+            const diasNoMes = new Date(anoAtual, mesAtual + 1, 0).getDate();
+
+            // Atualizar o título do mês
+            const nomeMes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(anoAtual, mesAtual, 1));
+            mesAnoAtualEl.textContent = `${nomeMes} ${anoAtual}`;
+
+            // Preencher os espaços vazios antes do primeiro dia do mês
+            for (let i = 0; i < primeiroDia; i++) {
+                const diaVazio = document.createElement('div');
+                diaVazio.className = 'calendar-day bg-slate-900 text-slate-600';
+                diasCalendarioEl.appendChild(diaVazio);
+            }
+
+            // Preencher os dias do mês
+            for (let dia = 1; dia <= diasNoMes; dia++) {
+                const dataString = formatarDataISO(anoAtual, mesAtual, dia);
+                
+                // Verificar se é hoje
+                const isHoje = dataString === formatarDataISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+                
+                // Buscar eventos que ocorrem neste dia
+                const eventosDoDia = registros.filter(reg => {
+                    return dataString >= reg.inicio && dataString <= reg.fim;
+                });
+
+                // Criar o elemento do dia
+                const diaEl = document.createElement('div');
+                diaEl.className = `calendar-day flex flex-col gap-1 overflow-y-auto no-scrollbar relative ${isHoje ? 'bg-indigo-900/20' : ''}`;
+                
+                // Número do dia
+                let htmlDia = `<span class="text-sm font-semibold ${isHoje ? 'text-white bg-indigo-600 rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-400'}">${dia}</span>`;
+                
+                // Adicionar os blocos (badges) dos eventos
+                eventosDoDia.forEach(evento => {
+                    const estilo = cores[evento.tipo];
+                    htmlDia += `
+                        <div class="text-[10px] leading-tight p-1 rounded border ${estilo.bg} ${estilo.border} ${estilo.text} font-medium truncate" title="${evento.nome} - ${nomesTipos[evento.tipo]}">
+                            <i class="fa-solid ${estilo.icon} mr-1"></i>${evento.nome}
+                        </div>
+                    `;
+                });
+
+                diaEl.innerHTML = htmlDia;
+                diasCalendarioEl.appendChild(diaEl);
+            }
+
+            // Preencher os espaços vazios no final (para manter o grid quadrado, opcional mas estético)
+            const celulasTotais = primeiroDia + diasNoMes;
+            const linhasNecessarias = Math.ceil(celulasTotais / 7);
+            const celulasFaltantes = (linhasNecessarias * 7) - celulasTotais;
+            
+            for (let i = 0; i < celulasFaltantes; i++) {
+                const diaVazio = document.createElement('div');
+                diaVazio.className = 'calendar-day bg-slate-900';
+                diasCalendarioEl.appendChild(diaVazio);
+            }
+
+            // Atualizar também a lista lateral sempre que o calendário mudar
+            renderizarListaRegistros();
+        }
+
+        // --- LÓGICA DA LISTA LATERAL ---
+        function renderizarListaRegistros() {
+            listaRegistrosEl.innerHTML = '';
+            
+            if (registros.length === 0) {
+                listaRegistrosEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Nenhum registro encontrado.</p>';
+                return;
+            }
+
+            // Ordenar por data de início
+            const registrosOrdenados = [...registros].sort((a, b) => a.inicio.localeCompare(b.inicio));
+
+            registrosOrdenados.forEach(reg => {
+                const estilo = cores[reg.tipo];
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-md border ${estilo.border} bg-slate-800 shadow-sm flex justify-between items-center group`;
+                
+                item.innerHTML = `
+                    <div>
+                        <p class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+                            <i class="fa-solid ${estilo.icon} ${estilo.text}"></i> ${reg.nome}
+                        </p>
+                        <p class="text-xs text-slate-400 mt-1">
+                            <span class="font-medium ${estilo.text}">${nomesTipos[reg.tipo]}</span>: 
+                            ${formatarDataBr(reg.inicio)} ${reg.inicio !== reg.fim ? 'até ' + formatarDataBr(reg.fim) : ''}
+                        </p>
+                    </div>
+                    <button onclick="deletarRegistro(${reg.id})" class="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-2" title="Excluir">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                listaRegistrosEl.appendChild(item);
+            });
+        }
+
+        // --- LÓGICA DO BANCO DE COLABORADORES ---
+        function renderizarColaboradores() {
+            // 1. Atualizar Select do Formulário Principal
+            selectNomeEl.innerHTML = '<option value="">Selecione um colaborador...</option>';
+            
+            // Ordenar alfabeticamente
+            const colabsOrdenados = [...colaboradores].sort((a, b) => a.nome.localeCompare(b.nome));
+
+            colabsOrdenados.forEach(colab => {
+                const option = document.createElement('option');
+                option.value = colab.nome; 
+                option.textContent = colab.nome;
+                selectNomeEl.appendChild(option);
+            });
+
+            // 2. Atualizar Lista de Gerenciamento no Modal
+            listaColaboradoresModalEl.innerHTML = '';
+            if (colabsOrdenados.length === 0) {
+                listaColaboradoresModalEl.innerHTML = '<p class="text-sm text-slate-400 italic text-center py-4">Nenhum colaborador cadastrado.</p>';
+            } else {
+                colabsOrdenados.forEach(colab => {
+                    const item = document.createElement('div');
+                    item.className = 'flex justify-between items-center p-3 bg-slate-700/50 border border-slate-600 rounded-md';
+                    item.innerHTML = `
+                        <span class="font-medium text-slate-200"><i class="fa-solid fa-user text-slate-400 mr-2"></i>${colab.nome}</span>
+                        <button onclick="removerColaborador(${colab.id})" class="text-rose-400 hover:text-rose-300 p-1 rounded transition-colors" title="Remover">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    `;
+                    listaColaboradoresModalEl.appendChild(item);
+                });
+            }
+        }
+
+        window.abrirModalEquipe = function() {
+            modalEquipeEl.classList.remove('hidden');
+            modalEquipeEl.classList.add('flex');
+            renderizarColaboradores();
+        }
+
+        window.fecharModalEquipe = function() {
+            modalEquipeEl.classList.add('hidden');
+            modalEquipeEl.classList.remove('flex');
+        }
+
+        window.removerColaborador = function(id) {
+            colaboradores = colaboradores.filter(c => c.id !== id);
+            renderizarColaboradores();
+        }
+
+        formNovoColaboradorEl.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const inputNome = document.getElementById('novoColaboradorNome');
+            const nomeStr = inputNome.value.trim();
+            
+            if (nomeStr) {
+                colaboradores.push({
+                    id: Date.now(),
+                    nome: nomeStr
+                });
+                inputNome.value = ''; // Limpar input
+                renderizarColaboradores();
+            }
+        });
+
+        // --- INTERAÇÕES E EVENTOS ---
+
+        // Navegação de Meses
+        document.getElementById('btnPrevMonth').addEventListener('click', () => {
+            mesAtual--;
+            if (mesAtual < 0) { mesAtual = 11; anoAtual--; }
+            renderizarCalendario();
+        });
+
+        document.getElementById('btnNextMonth').addEventListener('click', () => {
+            mesAtual++;
+            if (mesAtual > 11) { mesAtual = 0; anoAtual++; }
+            renderizarCalendario();
+        });
+
+        // Adicionar Novo Registro
+        registroForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            
+            const nome = document.getElementById('nome').value;
+            const tipo = document.getElementById('tipo').value;
+            const dataInicio = document.getElementById('dataInicio').value;
+            const dataFim = document.getElementById('dataFim').value;
+
+            // Validação simples de datas
+            if (dataInicio > dataFim) {
+                alert("A Data de Fim não pode ser anterior à Data de Início.");
+                return;
+            }
+
+            const novoRegistro = {
+                id: Date.now(), // Gera um ID único simples baseado no tempo
+                nome: nome,
+                tipo: tipo,
+                inicio: dataInicio,
+                fim: dataFim
+            };
+
+            registros.push(novoRegistro);
+            
+            // Limpa o formulário e foca no nome novamente
+            registroForm.reset();
+            document.getElementById('nome').focus();
+            
+            // Re-renderiza a tela
+            renderizarCalendario();
+        });
+
+        // Deletar Registro (Global para ser acessado via onclick no HTML inserido dinamicamente)
+        window.deletarRegistro = function(id) {
+            registros = registros.filter(reg => reg.id !== id);
+            renderizarCalendario();
+        };
+
+        // --- INICIALIZAÇÃO ---
+        // Definir valores padrão para as datas no formulário (hoje)
+        const hojeISO = formatarDataISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+        document.getElementById('dataInicio').value = hojeISO;
+        document.getElementById('dataFim').value = hojeISO;
+
+        // Renderizar a tela pela primeira vez
+        renderizarColaboradores();
+        renderizarCalendario();
+
+    </script>
+</body>
+</html>
