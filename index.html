@@ -3,467 +3,1449 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestão de Escala - Férias, Folgas e Atestados</title>
-    <!-- Tailwind CSS para estilização rápida e responsiva -->
+    <title>Gestão de ITs - Qualidade</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome para ícones -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- HTML2Canvas para exportar fluxogramas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            mustard: '#D4A373',
+                            mustardDark: '#B8860B',
+                            brown: '#5D4037',
+                            light: '#FDF6ED',
+                            bg: '#FAF8F5'
+                        },
+                        ios: {
+                            bg: '#F2F2F7',
+                            card: '#FFFFFF',
+                            text: '#000000',
+                            subtext: '#8E8E93',
+                            border: '#E5E5EA'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
-        /* Estilos personalizados para o calendário */
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, minmax(0, 1fr));
-            gap: 1px;
-            background-color: #334155; /* Cor da borda entre os dias */
-            border: 1px solid #334155;
+        /* Estilos Base e Scrollbar estilo iOS */
+        body { background-color: #FAF8F5; color: #000; -webkit-font-smoothing: antialiased; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D1D6; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #AEAEB2; }
+
+        /* Esconder tudo exceto a área de impressão quando for imprimir */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+            /* FORMATO DE PAISAGEM */
+            @page { size: A4 landscape; margin: 1cm; }
+            table { page-break-inside: auto; border-collapse: collapse; width: 100%; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            th, td { border: 1px solid #000; padding: 4px 8px; text-align: left; font-size: 10px; }
+            .text-center { text-align: center; }
+            .font-bold { font-weight: bold; }
         }
-        .calendar-day {
-            background-color: #1e293b;
-            min-height: 100px;
-            padding: 0.5rem;
+
+        .ios-input {
+            width: 100%; padding: 8px 10px; border: 1px solid #E5E5EA; border-radius: 8px; 
+            background: #fff; font-size: 13px; transition: border-color 0.2s;
         }
-        .calendar-header-day {
-            background-color: #0f172a;
-            text-align: center;
-            font-weight: 600;
-            padding: 0.5rem;
-            font-size: 0.875rem;
-            color: #94a3b8;
+        .ios-input:focus { outline: none; border-color: #D4A373; box-shadow: 0 0 0 3px rgba(212,163,115,0.2); }
+        .ios-input:disabled { background-color: #F3F4F6; cursor: not-allowed; opacity: 0.7; }
+        
+        .ios-card { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #E5E5EA; }
+
+        /* --- Estilos do Diagrama --- */
+        #diagram-canvas {
+            background-size: 20px 20px;
+            background-image: radial-gradient(circle, #CBD5E1 1px, transparent 1px);
+            transform-origin: top left;
         }
-        /* Ocultar barra de rolagem mas permitir scroll nos dias com muitos itens */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
+        
+        /* Blocos Padronizados para Alinhamento Matemático (160x80) */
+        .diagram-node { 
+            position: absolute; cursor: grab; user-select: none; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+            transition: box-shadow 0.2s, border-color 0.2s; display: flex; flex-direction: column; align-items: center; 
+            justify-content: center; text-align: center; z-index: 20; width: 160px; min-height: 80px; padding: 10px;
         }
-        .no-scrollbar {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+        .diagram-node:active { cursor: grabbing; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2); z-index: 50; }
+        .diagram-node.selected { border-color: #000000 !important; box-shadow: 0 0 0 3px rgba(0,0,0,0.3) !important; z-index: 40; border-width: 2px; }
+        
+        /* Título e Descrição nos blocos */
+        .node-title { font-size: 12px; font-weight: bold; width: 100%; word-wrap: break-word; display: flex; align-items: center; justify-content: center; text-align: center; }
+        .node-desc { font-size: 9.5px; font-weight: normal; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(0,0,0,0.15); width: 100%; text-align: center; display: none; word-wrap: break-word; }
+        
+        /* Ativador da visão detalhada */
+        .view-detailed .node-desc { display: block; }
+        
+        /* Variações Específicas */
+        .node-start { width: 120px !important; min-height: 40px !important; border: 2px solid #9CA3AF; border-radius: 9999px; }
+        .node-process { border: 2px solid #9CA3AF; border-radius: 8px; }
+        .node-decision { 
+            width: 160px !important; min-height: 120px !important; border: none !important; background: transparent !important; box-shadow: none !important; padding: 0 !important;
         }
+        .node-decision.selected { box-shadow: none !important; filter: drop-shadow(0 0 4px #000000); }
+        .node-decision:active { box-shadow: none !important; filter: drop-shadow(0 5px 5px rgba(0,0,0,0.2)); }
+        
+        /* Importação de Imagem */
+        .node-image { border: none !important; box-shadow: none !important; background: transparent !important; padding: 0; min-width: auto; width: auto !important; min-height: auto !important; }
+        .node-image.selected { box-shadow: 0 0 0 3px rgba(0,122,255,0.4) !important; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-900 min-h-screen text-slate-200 font-sans">
+<body class="h-screen flex overflow-hidden">
 
-    <!-- Cabeçalho -->
-    <header class="bg-slate-800 border-b border-slate-700 shadow-md">
-        <div class="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-end items-center">
-            <div class="flex gap-4 text-sm font-medium">
-                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-blue-500 block"></span> Férias</span>
-                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-emerald-500 block"></span> Folga</span>
-                <span class="flex items-center gap-1"><span class="w-3 h-3 rounded-full bg-rose-500 block"></span> Atestado</span>
-            </div>
+    <!-- SIDEBAR (Navegação) -->
+    <nav class="w-64 bg-white border-r border-ios-border flex flex-col no-print h-full shrink-0 z-10">
+        <div class="p-6">
+            <h1 class="text-xl font-bold flex items-center gap-2 text-brand-brown">
+                <i class="ph-fill ph-files text-2xl text-brand-mustard"></i> Gestão de ITs
+            </h1>
+            <p class="text-xs text-ios-subtext mt-1">Gestão de ITs e Padrões</p>
         </div>
-    </header>
+        
+        <div class="flex-1 px-4 space-y-2">
+            <button onclick="nav('its')" id="nav-its" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-brand-light text-brand-brown transition-colors">
+                <i class="ph ph-folder-open text-lg"></i> ITs em Vigência
+            </button>
+            <button onclick="nav('builder')" id="nav-builder" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <i class="ph ph-file-plus text-lg"></i> Criar Nova IT
+            </button>
+            <button onclick="nav('processes')" id="nav-processes" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <i class="ph ph-list-dashes text-lg"></i> Padrões / Processos
+            </button>
+            <button onclick="nav('diagrams')" id="nav-diagrams" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <i class="ph ph-graph text-lg"></i> Fluxogramas e APPCC
+            </button>
+        </div>
 
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="flex flex-col lg:flex-row gap-8">
+        <div class="p-4 border-t border-ios-border">
+            <button onclick="nav('config')" id="nav-config" class="nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+                <i class="ph ph-gear text-lg"></i> Configurações
+            </button>
+        </div>
+    </nav>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 h-full overflow-y-auto no-print bg-ios-bg relative">
+        
+        <!-- TELA 1: ITs em Vigência / Histórico -->
+        <section id="view-its" class="view-section p-8 max-w-6xl mx-auto block">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-ios-text">ITs e Histórico</h2>
+                    <p class="text-ios-subtext text-sm mt-1">Consulte, imprima e gerencie as revisões das Instruções de Trabalho.</p>
+                </div>
+            </div>
+
+            <div class="ios-card overflow-hidden">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 border-b border-ios-border text-ios-subtext uppercase text-xs font-semibold">
+                        <tr>
+                            <th class="px-6 py-4">Código / IT</th>
+                            <th class="px-6 py-4">Título</th>
+                            <th class="px-6 py-4">Setor</th>
+                            <th class="px-6 py-4 text-center">Revisão</th>
+                            <th class="px-6 py-4">Status</th>
+                            <th class="px-6 py-4 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="its-table-body" class="divide-y divide-ios-border">
+                        <!-- Preenchido via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TELA 2: Montador de IT -->
+        <section id="view-builder" class="view-section p-6 mx-auto hidden" style="max-width: 1400px;">
+            <h2 class="text-2xl font-bold text-ios-text mb-6">Montar Instrução de Trabalho</h2>
             
-            <!-- Painel Lateral: Formulário e Lista -->
-            <div class="w-full lg:w-1/3 flex flex-col gap-6">
-                
-                <!-- Formulário de Registro -->
-                <div class="bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700">
-                    <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
-                        <h2 class="text-lg font-semibold text-slate-200">
-                            <i class="fa-solid fa-plus-circle text-indigo-400 mr-1"></i> Registrar Evento
-                        </h2>
-                        <button onclick="abrirModalEquipe()" type="button" class="text-sm text-indigo-400 hover:text-indigo-300 font-medium bg-indigo-900/30 hover:bg-indigo-900/50 px-3 py-1 rounded transition-colors border border-indigo-800/50">
-                            <i class="fa-solid fa-users-gear mr-1"></i> Equipe
-                        </button>
-                    </div>
-                    <form id="registroForm" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-1">Colaborador</label>
-                            <select id="nome" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="">Selecione um colaborador...</option>
-                                <!-- Opções injetadas via JS -->
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-slate-300 mb-1">Tipo de Evento</label>
-                            <select id="tipo" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                <option value="ferias">Férias</option>
-                                <option value="folga">Folga</option>
-                                <option value="atestado">Atestado Médico</option>
-                            </select>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-1">Data Início</label>
-                                <input type="date" id="dataInicio" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark]">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <!-- Coluna Esquerda: Cabeçalho e Seleção de Processos -->
+                <div class="w-full lg:w-1/4 flex flex-col gap-6">
+                    <div class="ios-card p-5">
+                        <h3 class="font-bold text-ios-text mb-4 border-b border-ios-border pb-2 text-sm">1. Cabeçalho</h3>
+                        <div class="space-y-3">
+                            <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Nº IT</label><input type="text" id="it-num" class="ios-input" placeholder="Ex: IT- PFN - 001"></div>
+                            <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Título da Instrução</label><input type="text" id="it-title" class="ios-input" placeholder="Ex: Produção Pão Português"></div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Setor</label><input type="text" id="it-sector" class="ios-input"></div>
+                                <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Data</label><input type="text" id="it-date" class="ios-input" placeholder="Ex: Abril 2026"></div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium text-slate-300 mb-1">Data Fim</label>
-                                <input type="date" id="dataFim" required class="w-full bg-slate-700 border border-slate-600 text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 [color-scheme:dark]">
+                            <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Processo / Máquinas</label><input type="text" id="it-machines" class="ios-input"></div>
+                            <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">EPI's Obrigatórios</label><input type="text" id="it-epis" class="ios-input"></div>
+                            <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Recursos/Utensílios Gerais</label><textarea id="it-resources" class="ios-input" rows="2"></textarea></div>
+                            <div class="pt-3 border-t border-ios-border mt-2 space-y-2">
+                                <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Elaborado Por</label><input type="text" id="it-elab" class="ios-input"></div>
+                                <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Revisado Por</label><input type="text" id="it-rev" class="ios-input"></div>
+                                <div><label class="text-[10px] font-semibold text-ios-subtext uppercase">Aprovado Por</label><input type="text" id="it-aprov" class="ios-input"></div>
                             </div>
                         </div>
+                    </div>
 
-                        <button type="submit" class="w-full bg-indigo-600 text-white font-medium py-2 px-4 rounded-md hover:bg-indigo-500 transition duration-150 flex justify-center items-center gap-2">
-                            <i class="fa-solid fa-save"></i> Salvar Registro
-                        </button>
-                    </form>
-                </div>
-
-                <!-- Lista de Registros do Mês -->
-                <div class="bg-slate-800 rounded-lg shadow-lg p-6 border border-slate-700 flex-grow">
-                    <h2 class="text-lg font-semibold mb-4 text-slate-200 border-b border-slate-700 pb-2">
-                        <i class="fa-solid fa-list text-indigo-400 mr-1"></i> Registros Cadastrados
-                    </h2>
-                    <div id="listaRegistros" class="space-y-3 max-h-64 overflow-y-auto no-scrollbar">
-                        <!-- Itens renderizados via JS -->
-                        <p class="text-sm text-slate-400 text-center py-4">Nenhum registro encontrado.</p>
+                    <div class="ios-card p-5">
+                        <h3 class="font-bold text-ios-text mb-2 border-b border-ios-border pb-2 text-sm">2. Adicionar Etapas</h3>
+                        <div class="mb-3">
+                            <label class="text-[10px] font-semibold text-ios-subtext uppercase">Filtrar por Setor:</label>
+                            <select id="builder-sector-filter" class="ios-input mt-1" onchange="renderBuilderProcessList()"></select>
+                        </div>
+                        <div id="builder-process-list" class="space-y-2 max-h-64 overflow-y-auto pr-2">
+                            <!-- Processos para adicionar -->
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Painel Principal: Calendário -->
-            <div class="w-full lg:w-2/3 bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-700 flex flex-col">
-                
-                <!-- Controle de Meses -->
-                <div class="bg-slate-900/50 px-6 py-4 flex items-center justify-between border-b border-slate-700">
-                    <button id="btnPrevMonth" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-700 rounded-full transition">
-                        <i class="fa-solid fa-chevron-left text-xl"></i>
-                    </button>
-                    <h2 id="mesAnoAtual" class="text-xl font-bold text-slate-200 capitalize">Maio 2026</h2>
-                    <button id="btnNextMonth" class="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-700 rounded-full transition">
-                        <i class="fa-solid fa-chevron-right text-xl"></i>
-                    </button>
-                </div>
-
-                <!-- Grid do Calendário -->
-                <div class="p-4 flex-grow">
-                    <div class="calendar-grid rounded-lg overflow-hidden border border-slate-700">
-                        <!-- Cabeçalho dos dias da semana -->
-                        <div class="calendar-header-day">Dom</div>
-                        <div class="calendar-header-day">Seg</div>
-                        <div class="calendar-header-day">Ter</div>
-                        <div class="calendar-header-day">Qua</div>
-                        <div class="calendar-header-day">Qui</div>
-                        <div class="calendar-header-day">Sex</div>
-                        <div class="calendar-header-day">Sáb</div>
-                        
-                        <!-- Dias gerados via JS -->
-                        <div id="diasCalendario" class="contents"></div>
+                <!-- Coluna Direita: Preview da IT -->
+                <div class="w-full lg:w-3/4 flex flex-col gap-4">
+                    <div class="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-ios-border">
+                        <span class="font-medium text-ios-text text-sm">Etapas Selecionadas: <span id="builder-count" class="text-brand-mustard font-bold">0</span></span>
+                        <div class="flex gap-2">
+                            <button onclick="clearBuilder()" class="px-4 py-2 text-xs text-red-500 hover:bg-red-50 rounded-lg font-bold transition-colors">Limpar</button>
+                            <button onclick="saveIT()" class="px-4 py-2 text-xs bg-brand-mustard text-white rounded-lg font-bold shadow-sm hover:bg-brand-mustardDark transition-colors">Salvar IT</button>
+                        </div>
                     </div>
+                    <div id="builder-selected-steps" class="flex-1 ios-card p-4 overflow-y-auto min-h-[500px]"></div>
                 </div>
             </div>
+        </section>
 
-        </div>
-    </main>
-
-    <!-- Modal de Gerenciamento de Equipe -->
-    <div id="modalEquipe" class="fixed inset-0 bg-slate-900/80 hidden items-center justify-center z-50 backdrop-blur-sm">
-        <div class="bg-slate-800 rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden flex flex-col max-h-[90vh] border border-slate-700">
-            <div class="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
-                <h3 class="text-lg font-bold text-slate-200"><i class="fa-solid fa-users-gear text-indigo-400 mr-2"></i>Banco de Colaboradores</h3>
-                <button onclick="fecharModalEquipe()" class="text-slate-400 hover:text-slate-200">
-                    <i class="fa-solid fa-xmark text-xl"></i>
+        <!-- TELA 3: Processos / Padrões -->
+        <section id="view-processes" class="view-section p-8 max-w-5xl mx-auto hidden">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-ios-text">Biblioteca de Processos</h2>
+                    <p class="text-ios-subtext text-sm mt-1">Crie as etapas padrão (ex: Assamento, Fermentação) para reutilizar nas ITs.</p>
+                </div>
+                <button onclick="openProcessModal()" class="px-4 py-2 bg-brand-mustard text-white rounded-xl text-sm font-medium shadow-sm hover:bg-brand-mustardDark transition-colors flex items-center gap-2">
+                    <i class="ph ph-plus"></i> Novo Processo
                 </button>
             </div>
-            
-            <div class="p-6 flex-grow overflow-y-auto">
-                <form id="formNovoColaborador" class="flex gap-2 mb-6">
-                    <input type="text" id="novoColaboradorNome" required placeholder="Nome do novo colaborador" class="flex-grow bg-slate-700 border border-slate-600 text-slate-200 placeholder-slate-400 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-500 transition">Adicionar</button>
-                </form>
+            <div class="mb-4 flex gap-2 overflow-x-auto pb-2" id="process-sector-tabs"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="processes-grid"></div>
+        </section>
 
-                <h4 class="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">Equipe Cadastrada</h4>
-                <div id="listaColaboradoresModal" class="space-y-2">
-                    <!-- Lista gerada via JS -->
+        <!-- TELA 4: Fluxogramas / APPCC -->
+        <section id="view-diagrams" class="view-section p-6 mx-auto h-full w-full hidden flex-col">
+            <div class="flex justify-between items-end mb-4 shrink-0">
+                <div>
+                    <h2 class="text-2xl font-bold text-ios-text">Editor de Fluxogramas e APPCC</h2>
+                    <p class="text-ios-subtext text-sm mt-1">Espaço infinito para desenhar. Selecione um bloco para editar o texto e ver mudar ao vivo.</p>
                 </div>
+                <div class="flex gap-2">
+                    <button id="btn-toggle-diagram-view" onclick="diagramManager.toggleViewMode()" class="px-4 py-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold transition-colors flex items-center gap-2">
+                        <i class="ph-fill ph-eye"></i> Modo: Resumido
+                    </button>
+                    <button onclick="diagramManager.saveDiagram()" class="px-4 py-2 text-xs bg-green-600 text-white rounded-lg font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2">
+                        <i class="ph ph-floppy-disk"></i> Salvar Fluxo
+                    </button>
+                    <button onclick="diagramManager.newDiagram()" class="px-4 py-2 text-xs text-red-500 hover:bg-red-50 border border-red-200 rounded-lg font-bold transition-colors">Novo / Limpar</button>
+                    <button onclick="diagramManager.exportDiagram()" class="px-4 py-2 text-xs bg-brand-brown text-white rounded-lg font-bold shadow-sm hover:bg-opacity-90 transition-colors flex items-center gap-2"><i class="ph ph-download-simple"></i> Exportar Imagem</button>
+                </div>
+            </div>
+
+            <div class="flex flex-1 gap-0 overflow-hidden border border-gray-300 rounded-xl bg-white shadow-inner">
+                <!-- Toolbar do Diagrama -->
+                <div class="w-64 bg-gray-50 border-r border-gray-200 p-4 flex flex-col gap-4 overflow-y-auto shrink-0 z-20">
+                    
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Meus Fluxos Salvos</h3>
+                    <div id="saved-diagrams-list" class="flex flex-col gap-1 max-h-32 overflow-y-auto w-full mb-1"></div>
+                    <button onclick="diagramManager.newDiagram()" class="w-full py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 shadow-sm mb-3">
+                        <i class="ph ph-plus"></i> Novo Fluxograma
+                    </button>
+
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase tracking-wide border-t border-gray-200 pt-3">Adicionar ao Fluxo</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="diagramManager.addNode('start')" class="col-span-2 py-2 bg-[#E5E7EB] border border-[#9CA3AF] rounded-full text-xs font-bold shadow-sm hover:opacity-80">Início / Fim</button>
+                        <button onclick="diagramManager.addNode('process')" class="col-span-2 py-2 bg-[#E0F2FE] border border-[#38BDF8] rounded-lg text-xs font-bold shadow-sm hover:opacity-80">Processo Normal</button>
+                        
+                        <button onclick="diagramManager.addNode('decision')" class="col-span-2 py-2 relative flex items-center justify-center text-xs font-bold text-gray-800 hover:opacity-80 h-14">
+                            <svg class="absolute inset-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                                <polygon points="50,2 98,50 50,98 2,50" fill="#F3E8FF" stroke="#9CA3AF" stroke-width="3"/>
+                            </svg>
+                            <span class="relative z-10 transition-colors">Decisão?</span>
+                        </button>
+                        
+                        <button onclick="diagramManager.addNode('pc')" class="col-span-1 py-2 bg-[#FEF08A] border border-[#EAB308] rounded-lg text-[10px] font-bold shadow-sm hover:opacity-80">PC (Mod)</button>
+                        <button onclick="diagramManager.addNode('pcc')" class="col-span-1 py-2 bg-[#FEE2E2] border border-[#EF4444] rounded-lg text-[10px] font-bold shadow-sm hover:opacity-80">PCC (Crit)</button>
+                    </div>
+
+                    <h3 class="text-[10px] font-bold text-gray-500 uppercase tracking-wide mt-2 border-t border-gray-200 pt-4">Conexões & Mídias</h3>
+                    <button id="btn-toggle-connect" onclick="diagramManager.toggleConnectMode()" class="w-full py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                        <i class="ph ph-arrows-merge text-lg"></i> Ligar Blocos
+                    </button>
+                    <p class="text-[10px] text-gray-500 text-center hidden font-medium" id="connect-hint">Selecione o 1º bloco e depois o 2º para ligar.</p>
+
+                    <label class="w-full py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm">
+                        <i class="ph ph-image text-lg text-brand-mustard"></i> Importar Imagem
+                        <input type="file" accept="image/*" class="hidden" onchange="diagramManager.importImage(this)">
+                    </label>
+
+                    <!-- Bloco de Edição de Texto Rápida e Cores -->
+                    <div id="edit-text-panel" class="mt-2 border-t border-gray-200 pt-4 opacity-50 pointer-events-none transition-opacity">
+                        <h3 class="text-[10px] font-bold text-brand-mustard uppercase mb-2"><i class="ph-fill ph-pencil-simple"></i> Propriedades do Bloco</h3>
+                        <input type="text" id="node-text-input" class="ios-input text-xs font-bold mb-2" placeholder="Título do Bloco..." oninput="diagramManager.updateText(this.value)">
+                        <textarea id="node-desc-input" class="ios-input text-xs mb-2 resize-none h-16" placeholder="Descrição (aparece no modo Detalhado)..." oninput="diagramManager.updateDescription(this.value)"></textarea>
+                        
+                        <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Cor de Fundo:</p>
+                        <div class="flex flex-wrap gap-1 mb-2">
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#E0F2FE]" onclick="diagramManager.changeColor('#E0F2FE')" title="Azul"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#93C5FD]" onclick="diagramManager.changeColor('#93C5FD')" title="Azul Escuro"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#DCFCE7]" onclick="diagramManager.changeColor('#DCFCE7')" title="Verde Claro"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#86EFAC]" onclick="diagramManager.changeColor('#86EFAC')" title="Verde"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FEF08A]" onclick="diagramManager.changeColor('#FEF08A')" title="Amarelo Claro"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FDE047]" onclick="diagramManager.changeColor('#FDE047')" title="Amarelo"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FEE2E2]" onclick="diagramManager.changeColor('#FEE2E2')" title="Vermelho Claro"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FCA5A5]" onclick="diagramManager.changeColor('#FCA5A5')" title="Vermelho"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#F3E8FF]" onclick="diagramManager.changeColor('#F3E8FF')" title="Roxo Claro"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#D8B4E2]" onclick="diagramManager.changeColor('#D8B4E2')" title="Roxo"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FFEDD5]" onclick="diagramManager.changeColor('#FFEDD5')" title="Laranja"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#E5E7EB]" onclick="diagramManager.changeColor('#E5E7EB')" title="Cinza"></div>
+                            <div class="w-6 h-6 rounded cursor-pointer border border-gray-300 bg-[#FFFFFF]" onclick="diagramManager.changeColor('#FFFFFF')" title="Branco"></div>
+                        </div>
+
+                        <div id="diagram-img-resizer" class="hidden mt-2">
+                            <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Tamanho da Imagem:</p>
+                            <input type="range" id="node-size-input" min="50" max="500" value="100" class="w-full" oninput="diagramManager.changeImageSize(this.value)">
+                        </div>
+                    </div>
+
+                    <div class="mt-auto pt-4 border-t border-gray-200">
+                        <button onclick="diagramManager.deleteSelectedNode()" class="w-full py-2 text-red-500 bg-red-50 border border-red-200 rounded-lg text-xs font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                            <i class="ph ph-trash"></i> Excluir Bloco
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Área do Canvas com Scroll Infinito -->
+                <div class="flex-1 flex flex-col relative overflow-hidden bg-gray-200">
+                    <div id="diagram-export-area" class="flex flex-col bg-white overflow-hidden relative shadow-2xl m-4 flex-1 rounded-xl border border-gray-300">
+                        
+                        <!-- Cabeçalho de Impressão -->
+                        <div id="diagram-print-header" class="w-full flex justify-between items-center p-4 border-b border-gray-200 bg-white z-10 shrink-0">
+                            <img id="diagram-logo-img" src="" class="h-12 object-contain" alt="Logo Empresa">
+                            <input type="text" class="text-xl font-bold text-brand-brown text-center border-none outline-none bg-transparent flex-1" value="FLUXOGRAMA DE PROCESSO">
+                            <div class="w-24"></div> 
+                        </div>
+
+                        <!-- O Container do Scroll "Infinito" -->
+                        <div class="flex-1 overflow-auto bg-gray-100 relative custom-scrollbar" id="diagram-scroll-container">
+                            <!-- O Quadro Gigante (4000x4000) -->
+                            <div id="diagram-canvas" class="relative cursor-crosshair view-summarized bg-white" style="width: 4000px; height: 4000px;">
+                                <svg id="diagram-svg" class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 10;">
+                                    <defs>
+                                        <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+                                            <polygon points="0 0, 6 3, 0 6" fill="#000000" />
+                                        </marker>
+                                    </defs>
+                                    <g id="svg-lines"></g>
+                                </svg>
+                                <!-- Nodes inseridos aqui -->
+                            </div>
+                        </div>
+
+                        <!-- Legenda (Rodapé) -->
+                        <div id="diagram-print-footer" class="w-full p-3 border-t border-gray-200 bg-gray-50 flex flex-col z-10 shrink-0">
+                            <span class="text-[10px] font-bold text-gray-500 uppercase mb-1">Legenda / Observações:</span>
+                            <textarea class="w-full text-xs border border-gray-200 bg-white p-2 rounded outline-none resize-none h-12 text-gray-700 font-medium">Azul: Etapa de Processo  |  Amarelo: Ponto de Controle (PC)  |  Vermelho: Ponto Crítico de Controle (PCC)  |  Roxo: Tomada de Decisão</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TELA 5: Configurações -->
+        <section id="view-config" class="view-section p-8 max-w-3xl mx-auto hidden">
+            <div class="h-full w-full">
+                <h2 class="text-2xl font-bold text-ios-text mb-6">Configurações do Sistema</h2>
+                
+                <div class="ios-card p-6 mb-6">
+                    <h3 class="font-bold text-lg border-b border-ios-border pb-3 mb-4">Identidade Visual</h3>
+                    
+                    <div class="flex items-start gap-6">
+                        <div class="w-48 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-gray-50 overflow-hidden relative group">
+                            <img id="logo-preview" src="" class="max-w-full max-h-full object-contain hidden">
+                            <div id="logo-placeholder" class="text-center text-ios-subtext">
+                                <i class="ph ph-image text-3xl"></i>
+                                <p class="text-xs mt-1">Sem Logo</p>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-sm font-semibold text-ios-text mb-2">Logo da Empresa (Para Impressão e Fluxogramas)</label>
+                            <input type="file" id="logo-upload" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-600 hover:file:bg-blue-100 cursor-pointer">
+                            <p class="text-xs text-ios-subtext mt-2">Recomendado: Imagem PNG ou JPG retangular.</p>
+                            
+                            <button onclick="removeLogo()" class="mt-4 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition-colors border border-red-200">Remover Logo atual</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="ios-card p-6">
+                    <h3 class="font-bold text-lg border-b border-ios-border pb-3 mb-4">Dados de Exemplo</h3>
+                    <p class="text-sm text-ios-subtext mb-4">Caso deseje limpar todo o sistema e começar do zero (Atenção: Apaga todas as ITs e Processos).</p>
+                    <button onclick="clearAllData()" class="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium shadow-sm hover:bg-red-600 transition-colors">Zerar Sistema (Reset)</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAIS ... -->
+    <div id="process-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden flex items-center justify-center z-50 no-print">
+        <div class="bg-white rounded-2xl w-[90%] max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="p-5 border-b border-ios-border flex justify-between items-center bg-gray-50 rounded-t-2xl">
+                <h3 class="font-bold text-lg text-brand-brown" id="modal-process-title">Criar Novo Processo</h3>
+                <button onclick="closeProcessModal()" class="text-gray-400 hover:text-gray-700 text-xl"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto flex-1 bg-brand-bg">
+                <input type="hidden" id="p-id">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-[10px] font-bold text-ios-subtext uppercase">Título da Etapa</label>
+                        <input type="text" id="p-title" class="ios-input border-gray-300" placeholder="Ex: Assamento">
+                    </div>
+                    <div>
+                        <label class="text-[10px] font-bold text-ios-subtext uppercase">Setor</label>
+                        <input type="text" id="p-sector" class="ios-input border-gray-300" placeholder="Ex: Pré-Assados ou Padaria">
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <div class="flex justify-between items-center mb-2 bg-white p-3 rounded-lg border border-gray-200">
+                        <h4 class="font-bold text-sm text-ios-text">Tabela de Ações</h4>
+                        <button onclick="addProcessStep()" class="text-xs text-brand-mustard font-bold flex items-center gap-1 hover:underline">
+                            <i class="ph ph-plus-circle"></i> Adicionar Ação
+                        </button>
+                    </div>
+                    
+                    <div class="hidden md:grid grid-cols-12 gap-2 px-2 py-1 text-[10px] font-bold text-ios-subtext uppercase tracking-wider mb-1">
+                        <div class="col-span-1 text-center">Criticidade</div>
+                        <div class="col-span-4">Ação (Como fazer)</div>
+                        <div class="col-span-3">Ponto Crítico</div>
+                        <div class="col-span-2">Frequência</div>
+                        <div class="col-span-2">Recursos</div>
+                    </div>
+
+                    <div id="p-steps-container" class="space-y-2"></div>
+                </div>
+            </div>
+            <div class="p-5 border-t border-ios-border bg-white rounded-b-2xl flex justify-end gap-3">
+                <button onclick="closeProcessModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-100">Cancelar</button>
+                <button onclick="saveProcess()" class="px-4 py-2 rounded-xl text-sm font-bold bg-brand-mustard text-white shadow-sm hover:bg-brand-mustardDark">Salvar Processo na Biblioteca</button>
             </div>
         </div>
     </div>
 
-    <!-- Script Principal -->
-    <script>
-        // --- ESTADO DA APLICAÇÃO (Dados em Memória) ---
-        
-        // Banco de dados de colaboradores
-        let colaboradores = [];
-
-        // Aqui guardamos os registros. Inicializamos com alguns dados de exemplo didáticos.
-        let registros = [];
-
-        // Variáveis para controlar o mês exibido
-        let dataAtual = new Date(); // Inicia com a data de hoje
-        let mesAtual = dataAtual.getMonth();
-        let anoAtual = dataAtual.getFullYear();
-
-        // Configuração de cores para os tipos
-        const cores = {
-            ferias: { bg: 'bg-blue-900/40', border: 'border-blue-700/50', text: 'text-blue-300', icon: 'fa-umbrella-beach' },
-            folga: { bg: 'bg-emerald-900/40', border: 'border-emerald-700/50', text: 'text-emerald-300', icon: 'fa-mug-hot' },
-            atestado: { bg: 'bg-rose-900/40', border: 'border-rose-700/50', text: 'text-rose-300', icon: 'fa-notes-medical' }
-        };
-
-        const nomesTipos = {
-            ferias: "Férias",
-            folga: "Folga",
-            atestado: "Atestado"
-        };
-
-        // --- ELEMENTOS DO DOM ---
-        const diasCalendarioEl = document.getElementById('diasCalendario');
-        const mesAnoAtualEl = document.getElementById('mesAnoAtual');
-        const listaRegistrosEl = document.getElementById('listaRegistros');
-        const registroForm = document.getElementById('registroForm');
-        
-        // Novos elementos para equipe
-        const selectNomeEl = document.getElementById('nome');
-        const modalEquipeEl = document.getElementById('modalEquipe');
-        const listaColaboradoresModalEl = document.getElementById('listaColaboradoresModal');
-        const formNovoColaboradorEl = document.getElementById('formNovoColaborador');
-
-        // --- FUNÇÕES AUXILIARES ---
-        // Formata uma data para o padrão YYYY-MM-DD
-        function formatarDataISO(ano, mes, dia) {
-            return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-        }
-
-        // Formata YYYY-MM-DD para DD/MM/YYYY para exibição
-        function formatarDataBr(dataISO) {
-            const partes = dataISO.split('-');
-            return `${partes[2]}/${partes[1]}/${partes[0]}`;
-        }
-
-        // --- LÓGICA DO CALENDÁRIO ---
-        function renderizarCalendario() {
-            diasCalendarioEl.innerHTML = '';
-            
-            // Obter o primeiro dia da semana no mês (0 = Dom, 1 = Seg...)
-            const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
-            // Obter o número total de dias no mês
-            const diasNoMes = new Date(anoAtual, mesAtual + 1, 0).getDate();
-
-            // Atualizar o título do mês
-            const nomeMes = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date(anoAtual, mesAtual, 1));
-            mesAnoAtualEl.textContent = `${nomeMes} ${anoAtual}`;
-
-            // Preencher os espaços vazios antes do primeiro dia do mês
-            for (let i = 0; i < primeiroDia; i++) {
-                const diaVazio = document.createElement('div');
-                diaVazio.className = 'calendar-day bg-slate-900 text-slate-600';
-                diasCalendarioEl.appendChild(diaVazio);
-            }
-
-            // Preencher os dias do mês
-            for (let dia = 1; dia <= diasNoMes; dia++) {
-                const dataString = formatarDataISO(anoAtual, mesAtual, dia);
-                
-                // Verificar se é hoje
-                const isHoje = dataString === formatarDataISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-                
-                // Buscar eventos que ocorrem neste dia
-                const eventosDoDia = registros.filter(reg => {
-                    return dataString >= reg.inicio && dataString <= reg.fim;
-                });
-
-                // Criar o elemento do dia
-                const diaEl = document.createElement('div');
-                diaEl.className = `calendar-day flex flex-col gap-1 overflow-y-auto no-scrollbar relative ${isHoje ? 'bg-indigo-900/20' : ''}`;
-                
-                // Número do dia
-                let htmlDia = `<span class="text-sm font-semibold ${isHoje ? 'text-white bg-indigo-600 rounded-full w-6 h-6 flex items-center justify-center' : 'text-slate-400'}">${dia}</span>`;
-                
-                // Adicionar os blocos (badges) dos eventos
-                eventosDoDia.forEach(evento => {
-                    const estilo = cores[evento.tipo];
-                    htmlDia += `
-                        <div class="text-[10px] leading-tight p-1 rounded border ${estilo.bg} ${estilo.border} ${estilo.text} font-medium truncate" title="${evento.nome} - ${nomesTipos[evento.tipo]}">
-                            <i class="fa-solid ${estilo.icon} mr-1"></i>${evento.nome}
-                        </div>
-                    `;
-                });
-
-                diaEl.innerHTML = htmlDia;
-                diasCalendarioEl.appendChild(diaEl);
-            }
-
-            // Preencher os espaços vazios no final (para manter o grid quadrado, opcional mas estético)
-            const celulasTotais = primeiroDia + diasNoMes;
-            const linhasNecessarias = Math.ceil(celulasTotais / 7);
-            const celulasFaltantes = (linhasNecessarias * 7) - celulasTotais;
-            
-            for (let i = 0; i < celulasFaltantes; i++) {
-                const diaVazio = document.createElement('div');
-                diaVazio.className = 'calendar-day bg-slate-900';
-                diasCalendarioEl.appendChild(diaVazio);
-            }
-
-            // Atualizar também a lista lateral sempre que o calendário mudar
-            renderizarListaRegistros();
-        }
-
-        // --- LÓGICA DA LISTA LATERAL ---
-        function renderizarListaRegistros() {
-            listaRegistrosEl.innerHTML = '';
-            
-            if (registros.length === 0) {
-                listaRegistrosEl.innerHTML = '<p class="text-sm text-slate-400 text-center py-4">Nenhum registro encontrado.</p>';
-                return;
-            }
-
-            // Ordenar por data de início
-            const registrosOrdenados = [...registros].sort((a, b) => a.inicio.localeCompare(b.inicio));
-
-            registrosOrdenados.forEach(reg => {
-                const estilo = cores[reg.tipo];
-                const item = document.createElement('div');
-                item.className = `p-3 rounded-md border ${estilo.border} bg-slate-800 shadow-sm flex justify-between items-center group`;
-                
-                item.innerHTML = `
-                    <div>
-                        <p class="font-semibold text-slate-200 text-sm flex items-center gap-2">
-                            <i class="fa-solid ${estilo.icon} ${estilo.text}"></i> ${reg.nome}
-                        </p>
-                        <p class="text-xs text-slate-400 mt-1">
-                            <span class="font-medium ${estilo.text}">${nomesTipos[reg.tipo]}</span>: 
-                            ${formatarDataBr(reg.inicio)} ${reg.inicio !== reg.fim ? 'até ' + formatarDataBr(reg.fim) : ''}
-                        </p>
-                    </div>
-                    <button onclick="deletarRegistro(${reg.id})" class="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-2" title="Excluir">
-                        <i class="fa-solid fa-trash"></i>
+    <!-- MODAL DE VISUALIZAÇÃO (PREVIEW PAISAGEM) -->
+    <div id="preview-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 no-print">
+        <div class="bg-ios-bg rounded-2xl w-[95%] max-w-6xl h-[95vh] flex flex-col shadow-2xl overflow-hidden transform transition-transform scale-95" id="preview-modal-box">
+            <div class="p-4 bg-white border-b border-ios-border flex justify-between items-center shrink-0">
+                <div>
+                    <h3 class="font-bold text-lg text-brand-brown flex items-center gap-2"><i class="ph ph-eye text-brand-mustard text-xl"></i> Visualização da IT (Formato Paisagem)</h3>
+                    <p class="text-xs text-ios-subtext mt-1">Confira o documento antes de imprimir.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="printFromPreview()" class="px-4 py-2 bg-brand-mustard text-white rounded-xl text-sm font-bold shadow-sm hover:bg-brand-mustardDark flex items-center gap-2 transition-colors">
+                        <i class="ph ph-printer"></i> Imprimir / Gerar PDF
                     </button>
-                `;
-                listaRegistrosEl.appendChild(item);
-            });
-        }
+                    <button onclick="closePreviewModal()" class="w-10 h-10 flex items-center justify-center bg-gray-100 text-gray-600 rounded-full hover:bg-gray-200 transition-colors">
+                        <i class="ph ph-x text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 flex justify-center bg-gray-200">
+                <div id="preview-content" class="bg-white shadow-lg p-10 w-[297mm] min-h-[210mm] text-[11px] font-sans text-black"></div>
+            </div>
+        </div>
+    </div>
 
-        // --- LÓGICA DO BANCO DE COLABORADORES ---
-        function renderizarColaboradores() {
-            // 1. Atualizar Select do Formulário Principal
-            selectNomeEl.innerHTML = '<option value="">Selecione um colaborador...</option>';
-            
-            // Ordenar alfabeticamente
-            const colabsOrdenados = [...colaboradores].sort((a, b) => a.nome.localeCompare(b.nome));
+    <div id="history-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 no-print">
+        <div class="bg-white rounded-2xl w-[90%] max-w-2xl max-h-[80vh] flex flex-col shadow-2xl transform transition-transform scale-95" id="history-modal-box">
+            <div class="p-5 border-b border-ios-border flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
+                <h3 class="font-bold text-lg text-brand-brown flex items-center gap-2"><i class="ph ph-magnifying-glass text-brand-mustard text-xl"></i> Histórico de Revisões</h3>
+                <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-700 text-xl"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto flex-1 bg-brand-bg rounded-b-2xl"><div id="history-list" class="space-y-4"></div></div>
+        </div>
+    </div>
 
-            colabsOrdenados.forEach(colab => {
-                const option = document.createElement('option');
-                option.value = colab.nome; 
-                option.textContent = colab.nome;
-                selectNomeEl.appendChild(option);
-            });
+    <div id="delete-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center z-50 no-print">
+        <div class="bg-white rounded-2xl w-[90%] max-w-md p-6 flex flex-col items-center text-center shadow-2xl transform transition-transform scale-95" id="delete-modal-box">
+            <div class="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-4"><i class="ph ph-trash text-3xl"></i></div>
+            <h3 class="font-bold text-xl text-gray-900 mb-2">Excluir Instrução?</h3>
+            <p class="text-sm text-gray-500 mb-6">Esta ação é permanente. Toda a IT e seu histórico de revisões serão apagados do sistema.</p>
+            <div class="flex gap-3 w-full">
+                <button onclick="closeDeleteModal()" class="flex-1 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">Cancelar</button>
+                <button id="confirm-delete-btn" class="flex-1 py-3 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 transition-colors shadow-sm shadow-red-200">Sim, Excluir</button>
+            </div>
+        </div>
+    </div>
 
-            // 2. Atualizar Lista de Gerenciamento no Modal
-            listaColaboradoresModalEl.innerHTML = '';
-            if (colabsOrdenados.length === 0) {
-                listaColaboradoresModalEl.innerHTML = '<p class="text-sm text-slate-400 italic text-center py-4">Nenhum colaborador cadastrado.</p>';
-            } else {
-                colabsOrdenados.forEach(colab => {
-                    const item = document.createElement('div');
-                    item.className = 'flex justify-between items-center p-3 bg-slate-700/50 border border-slate-600 rounded-md';
-                    item.innerHTML = `
-                        <span class="font-medium text-slate-200"><i class="fa-solid fa-user text-slate-400 mr-2"></i>${colab.nome}</span>
-                        <button onclick="removerColaborador(${colab.id})" class="text-rose-400 hover:text-rose-300 p-1 rounded transition-colors" title="Remover">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                    `;
-                    listaColaboradoresModalEl.appendChild(item);
-                });
-            }
-        }
+    <div id="print-area" class="hidden font-sans text-xs bg-white w-full"></div>
 
-        window.abrirModalEquipe = function() {
-            modalEquipeEl.classList.remove('hidden');
-            modalEquipeEl.classList.add('flex');
-            renderizarColaboradores();
-        }
-
-        window.fecharModalEquipe = function() {
-            modalEquipeEl.classList.add('hidden');
-            modalEquipeEl.classList.remove('flex');
-        }
-
-        window.removerColaborador = function(id) {
-            colaboradores = colaboradores.filter(c => c.id !== id);
-            renderizarColaboradores();
-        }
-
-        formNovoColaboradorEl.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const inputNome = document.getElementById('novoColaboradorNome');
-            const nomeStr = inputNome.value.trim();
-            
-            if (nomeStr) {
-                colaboradores.push({
-                    id: Date.now(),
-                    nome: nomeStr
-                });
-                inputNome.value = ''; // Limpar input
-                renderizarColaboradores();
-            }
-        });
-
-        // --- INTERAÇÕES E EVENTOS ---
-
-        // Navegação de Meses
-        document.getElementById('btnPrevMonth').addEventListener('click', () => {
-            mesAtual--;
-            if (mesAtual < 0) { mesAtual = 11; anoAtual--; }
-            renderizarCalendario();
-        });
-
-        document.getElementById('btnNextMonth').addEventListener('click', () => {
-            mesAtual++;
-            if (mesAtual > 11) { mesAtual = 0; anoAtual++; }
-            renderizarCalendario();
-        });
-
-        // Adicionar Novo Registro
-        registroForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            
-            const nome = document.getElementById('nome').value;
-            const tipo = document.getElementById('tipo').value;
-            const dataInicio = document.getElementById('dataInicio').value;
-            const dataFim = document.getElementById('dataFim').value;
-
-            // Validação simples de datas
-            if (dataInicio > dataFim) {
-                alert("A Data de Fim não pode ser anterior à Data de Início.");
-                return;
-            }
-
-            const novoRegistro = {
-                id: Date.now(), // Gera um ID único simples baseado no tempo
-                nome: nome,
-                tipo: tipo,
-                inicio: dataInicio,
-                fim: dataFim
-            };
-
-            registros.push(novoRegistro);
-            
-            // Limpa o formulário e foca no nome novamente
-            registroForm.reset();
-            document.getElementById('nome').focus();
-            
-            // Re-renderiza a tela
-            renderizarCalendario();
-        });
-
-        // Deletar Registro (Global para ser acessado via onclick no HTML inserido dinamicamente)
-        window.deletarRegistro = function(id) {
-            registros = registros.filter(reg => reg.id !== id);
-            renderizarCalendario();
+    <script>
+        // --- ESTADO DA APLICAÇÃO ---
+        let appState = {
+            settings: { logo: null }, processes: [], its: [],
+            currentBuilderIT: { id: null, revision: 0, steps: [] },
+            diagramsData: { nodes: [], connections: [] }
         };
 
-        // --- INICIALIZAÇÃO ---
-        // Definir valores padrão para as datas no formulário (hoje)
-        const hojeISO = formatarDataISO(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-        document.getElementById('dataInicio').value = hojeISO;
-        document.getElementById('dataFim').value = hojeISO;
+        function init() {
+            const saved = localStorage.getItem('qualiDocsState');
+            if (saved) {
+                appState = JSON.parse(saved);
+                if(!appState.diagramsData) appState.diagramsData = { nodes: [], connections: [] };
+                appState.its.forEach(it => { it.steps.forEach(p => p.steps.forEach(s => { if(!s.photos) s.photos = []; })); });
+            } else loadMockData(); 
+            
+            updateLogoPreview(); renderProcesses(); renderBuilderProcessList(); renderITs();
+            diagramManager.init();
+        }
 
-        // Renderizar a tela pela primeira vez
-        renderizarColaboradores();
-        renderizarCalendario();
+        function saveState() {
+            try { localStorage.setItem('qualiDocsState', JSON.stringify(appState)); } 
+            catch (e) { alert("⚠️ LIMITE DE ARMAZENAMENTO ATINGIDO!\n\nApague algumas fotos para continuar."); }
+        }
 
+        // --- NAVEGAÇÃO SEGURA ---
+        function nav(viewId) {
+            const views = ['its', 'builder', 'processes', 'diagrams', 'config'];
+            
+            views.forEach(v => {
+                const el = document.getElementById('view-' + v);
+                if (el) {
+                    if (v === viewId) {
+                        el.classList.remove('hidden');
+                        if (v === 'diagrams') el.classList.add('flex');
+                    } else {
+                        el.classList.add('hidden');
+                        if (v === 'diagrams') el.classList.remove('flex');
+                    }
+                }
+            });
+            
+            document.querySelectorAll('.nav-btn').forEach(el => el.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors");
+            const btn = document.getElementById('nav-' + viewId);
+            if(btn) btn.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-brand-light text-brand-brown transition-colors";
+
+            if (viewId === 'builder') renderBuilderProcessList();
+            if (viewId === 'its') renderITs();
+            if (viewId === 'processes') renderProcesses();
+            
+            if (viewId === 'diagrams') {
+                setTimeout(() => {
+                    const sc = document.getElementById('diagram-scroll-container');
+                    if (sc && sc.dataset.centered !== 'true') {
+                        let targetX = 2000, targetY = 2000;
+                        if (diagramManager.nodes.length > 0) { targetX = diagramManager.nodes[0].x; targetY = diagramManager.nodes[0].y; }
+                        sc.scrollLeft = targetX - sc.clientWidth / 2 + 80;
+                        sc.scrollTop = targetY - sc.clientHeight / 2 + 40;
+                        sc.dataset.centered = 'true';
+                    }
+                }, 50);
+            }
+        }
+
+        document.getElementById('logo-upload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                        let width = img.width, height = img.height;
+                        if (width > height) { if (width > 300) { height *= 300 / width; width = 300; } } 
+                        else { if (height > 150) { width *= 150 / height; height = 150; } }
+                        canvas.width = width; canvas.height = height;
+                        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
+                        appState.settings.logo = canvas.toDataURL('image/jpeg', 0.8);
+                        updateLogoPreview(); saveState();
+                    };
+                    img.src = event.target.result;
+                }; reader.readAsDataURL(file);
+            }
+        });
+
+        function updateLogoPreview() {
+            const img = document.getElementById('logo-preview'); const placeholder = document.getElementById('logo-placeholder'); const diagramLogo = document.getElementById('diagram-logo-img');
+            if (appState.settings.logo) {
+                img.src = appState.settings.logo; img.classList.remove('hidden'); placeholder.classList.add('hidden');
+                if(diagramLogo) { diagramLogo.src = appState.settings.logo; diagramLogo.classList.remove('hidden'); }
+            } else {
+                img.src = ''; img.classList.add('hidden'); placeholder.classList.remove('hidden');
+                if(diagramLogo) diagramLogo.classList.add('hidden');
+            }
+        }
+
+        function removeLogo() { appState.settings.logo = null; document.getElementById('logo-upload').value = ''; updateLogoPreview(); saveState(); }
+        function clearAllData() { if(confirm('Tem certeza? Apagará tudo.')){ appState = { settings: { logo: null }, processes: [], its: [], currentBuilderIT: { id: null, revision: 0, steps: [] }, diagramsData: {nodes:[], connections:[]} }; saveState(); init(); nav('processes'); } }
+
+        let currentProcessSteps = []; let activeSectorFilter = 'Todos';
+        function filterSector(sector) { activeSectorFilter = sector; renderProcesses(); }
+        function renderProcesses() {
+            const sectors = [...new Set(appState.processes.map(p => p.sector))].filter(Boolean);
+            const tabsContainer = document.getElementById('process-sector-tabs');
+            let tabsHtml = `<button onclick="filterSector('Todos')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-colors whitespace-nowrap ${activeSectorFilter === 'Todos' ? 'bg-brand-brown text-white' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'}">Todos</button>`;
+            sectors.forEach(sec => { tabsHtml += `<button onclick="filterSector('${sec}')" class="px-4 py-1.5 rounded-full text-sm font-bold transition-colors whitespace-nowrap ${activeSectorFilter === sec ? 'bg-brand-brown text-white' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'}">${sec}</button>`; });
+            tabsContainer.innerHTML = tabsHtml;
+
+            const grid = document.getElementById('processes-grid'); grid.innerHTML = '';
+            const filtered = activeSectorFilter === 'Todos' ? appState.processes : appState.processes.filter(p => p.sector === activeSectorFilter);
+            filtered.forEach(p => {
+                const card = document.createElement('div'); card.className = "ios-card p-5 hover:shadow-md transition-shadow relative group border-t-4 border-t-transparent hover:border-t-brand-mustard";
+                let hasRed = p.steps.some(s => s.criticality === 'red'), hasYellow = p.steps.some(s => s.criticality === 'yellow');
+                let dotColor = hasRed ? 'bg-red-500' : (hasYellow ? 'bg-yellow-500' : 'bg-green-500');
+                card.innerHTML = `<div class="flex justify-between items-start mb-2"><div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full shadow-inner ${dotColor}"></span><h4 class="font-bold text-brand-brown">${p.title}</h4></div><div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onclick="editProcess('${p.id}')" class="text-brand-mustard hover:bg-brand-light p-1.5 rounded-lg"><i class="ph ph-pencil-simple text-lg"></i></button><button onclick="deleteProcess('${p.id}')" class="text-red-500 hover:bg-red-50 p-1.5 rounded-lg"><i class="ph ph-trash text-lg"></i></button></div></div><span class="inline-block px-2 py-1 bg-brand-light text-brand-brown text-[10px] uppercase font-bold rounded mb-3 border border-brand-mustard/20">${p.sector}</span><p class="text-xs text-ios-subtext mb-2">${p.steps.length} subtarefa(s)</p><div class="space-y-1 mt-2">${p.steps.slice(0, 2).map(s => `<p class="text-xs text-gray-600 truncate"><i class="ph ph-caret-right text-brand-mustard"></i> ${s.action}</p>`).join('')}</div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        function openProcessModal(id = null) {
+            document.getElementById('process-modal').classList.remove('hidden');
+            if (id) {
+                const p = appState.processes.find(x => x.id === id);
+                document.getElementById('modal-process-title').innerText = "Editar Processo"; document.getElementById('p-id').value = p.id;
+                document.getElementById('p-title').value = p.title; document.getElementById('p-sector').value = p.sector;
+                currentProcessSteps = JSON.parse(JSON.stringify(p.steps));
+            } else {
+                document.getElementById('modal-process-title').innerText = "Criar Novo Processo"; document.getElementById('p-id').value = '';
+                document.getElementById('p-title').value = ''; document.getElementById('p-sector').value = activeSectorFilter !== 'Todos' ? activeSectorFilter : '';
+                currentProcessSteps = [{ action: '', criticality: 'green', critText: '', freq: '', resources: '', photos: [] }];
+            }
+            renderProcessStepsForm();
+        }
+
+        function closeProcessModal() { document.getElementById('process-modal').classList.add('hidden'); }
+        function addProcessStep() { currentProcessSteps.push({ action: '', criticality: 'green', critText: '', freq: '', resources: '', photos: [] }); renderProcessStepsForm(); }
+        function removeProcessStep(index) { currentProcessSteps.splice(index, 1); renderProcessStepsForm(); }
+
+        function manageTable(type, uidOrIdx, stepIdx, action, rIdx = null, cIdx = null, val = null) {
+            let targetStep = type === 'library' ? currentProcessSteps[stepIdx] : (appState.currentBuilderIT.steps.find(x => x.uid === uidOrIdx)?.steps[stepIdx]);
+            if (!targetStep) return;
+            if (action === 'create') targetStep.table = [['Coluna 1', 'Coluna 2'], ['Valor', 'Valor']];
+            else if (action === 'add-row') targetStep.table.push(new Array(targetStep.table[0].length).fill(''));
+            else if (action === 'add-col') targetStep.table.forEach(row => row.push(''));
+            else if (action === 'update') { targetStep.table[rIdx][cIdx] = val; return; }
+            else if (action === 'remove') delete targetStep.table;
+            if (type === 'library') renderProcessStepsForm(); else renderBuilderSteps();
+            saveState();
+        }
+
+        function renderProcessStepsForm() {
+            const container = document.getElementById('p-steps-container'); container.innerHTML = '';
+            currentProcessSteps.forEach((step, index) => {
+                let critColorClass = step.criticality === 'red' ? 'bg-red-100 text-red-600 border-red-200' : (step.criticality === 'yellow' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-green-100 text-green-700 border-green-200');
+                let tableHtml = '';
+                if (step.table) {
+                    let rHtml = step.table.map((row, rI) => { return `<tr>` + row.map((col, cI) => `<td class="border border-gray-300 p-0"><input class="w-full text-xs p-1 outline-none ${rI===0?'font-bold bg-gray-100':''}" value="${col}" oninput="manageTable('library', null, ${index}, 'update', ${rI}, ${cI}, this.value)"></td>`).join('') + `</tr>`; }).join('');
+                    tableHtml = `<div class="col-span-12 mt-2 bg-gray-50 p-2 rounded border border-gray-200 w-full"><div class="flex justify-between items-center mb-1"><span class="text-[10px] font-bold text-gray-500 uppercase">Tabela Auxiliar</span><div class="flex gap-1"><button onclick="manageTable('library', null, ${index}, 'add-row')" class="text-[10px] border bg-white px-1 rounded hover:bg-gray-100">+ Linha</button><button onclick="manageTable('library', null, ${index}, 'add-col')" class="text-[10px] border bg-white px-1 rounded hover:bg-gray-100">+ Coluna</button><button onclick="manageTable('library', null, ${index}, 'remove')" class="text-[10px] border bg-white px-1 rounded text-red-500 hover:bg-red-50 ml-2"><i class="ph ph-trash"></i></button></div></div><div class="overflow-x-auto"><table class="w-full border-collapse bg-white">${rHtml}</table></div></div>`;
+                }
+                container.innerHTML += `
+                    <div class="bg-white border border-gray-200 rounded-lg p-2 relative shadow-sm flex flex-col gap-2 items-start">
+                        <div class="flex flex-col md:flex-row gap-2 w-full">
+                            <div class="w-full md:w-auto shrink-0 md:w-24">
+                                <select class="w-full text-[11px] font-bold p-2 border rounded outline-none cursor-pointer ${critColorClass}" onchange="currentProcessSteps[${index}].criticality=this.value; renderProcessStepsForm();">
+                                    <option value="green" ${step.criticality === 'green' ? 'selected' : ''}>🟢 OK</option><option value="yellow" ${step.criticality === 'yellow' ? 'selected' : ''}>🟡 Mod</option><option value="red" ${step.criticality === 'red' ? 'selected' : ''}>🔴 Crit</option>
+                                </select>
+                            </div>
+                            <div class="flex-1 w-full"><textarea class="w-full bg-gray-50 border border-gray-200 rounded p-2 text-xs outline-none focus:border-brand-mustard focus:bg-white resize-none p-step-action h-12" data-idx="${index}" placeholder="Ação passo a passo...">${step.action}</textarea></div>
+                            <div class="w-full md:w-48 shrink-0"><textarea class="w-full bg-gray-50 border border-gray-200 rounded p-2 text-xs outline-none focus:border-brand-mustard focus:bg-white resize-none p-step-critText h-12" data-idx="${index}" placeholder="Detalhe o ponto crítico...">${step.critText || ''}</textarea></div>
+                            <div class="w-full md:w-32 shrink-0 space-y-1"><input type="text" class="w-full bg-gray-50 border border-gray-200 rounded p-1.5 text-[11px] outline-none focus:border-brand-mustard focus:bg-white p-step-freq" data-idx="${index}" value="${step.freq}" placeholder="Frequência"><input type="text" class="w-full bg-gray-50 border border-gray-200 rounded p-1.5 text-[11px] outline-none focus:border-brand-mustard focus:bg-white p-step-rec" data-idx="${index}" value="${step.resources}" placeholder="Recursos"></div>
+                            <div class="w-full md:w-8 flex justify-center pt-2 md:pt-3">${currentProcessSteps.length > 1 ? `<button onclick="removeProcessStep(${index})" class="text-gray-300 hover:text-red-500 transition-colors"><i class="ph-fill ph-trash text-lg"></i></button>` : ''}</div>
+                        </div>
+                        <div class="w-full flex items-center justify-between border-t border-gray-100 pt-1 mt-1"><button onclick="manageTable('library', null, ${index}, 'create')" class="text-[10px] text-brand-mustard font-bold flex items-center gap-1 hover:underline bg-brand-light px-2 py-1 rounded border border-brand-mustard/30"><i class="ph ph-table"></i> Add Tabela</button></div>
+                        ${tableHtml}
+                    </div>`;
+            });
+        }
+
+        function saveProcess() {
+            const id = document.getElementById('p-id').value || 'proc_' + Date.now();
+            const title = document.getElementById('p-title').value;
+            const sector = document.getElementById('p-sector').value;
+            if (!title) return alert('Dê um título ao processo.');
+
+            const newSteps = [];
+            document.querySelectorAll('.p-step-action').forEach(el => {
+                const idx = el.getAttribute('data-idx');
+                newSteps.push({
+                    action: el.value, critText: document.querySelector(`.p-step-critText[data-idx="${idx}"]`).value,
+                    criticality: currentProcessSteps[idx].criticality, freq: document.querySelector(`.p-step-freq[data-idx="${idx}"]`).value,
+                    resources: document.querySelector(`.p-step-rec[data-idx="${idx}"]`).value, photos: currentProcessSteps[idx].photos || [], table: currentProcessSteps[idx].table || null
+                });
+            });
+
+            const processObj = { id, title, sector, steps: newSteps };
+            const existingIdx = appState.processes.findIndex(x => x.id === id);
+            if (existingIdx > -1) appState.processes[existingIdx] = processObj; else appState.processes.push(processObj);
+
+            saveState(); closeProcessModal(); renderProcesses(); renderBuilderProcessList(); 
+        }
+
+        function deleteProcess(id) { if(confirm('Excluir este processo da biblioteca?')) { appState.processes = appState.processes.filter(x => x.id !== id); saveState(); renderProcesses(); } }
+        function editProcess(id) { openProcessModal(id); }
+
+        function renderBuilderProcessList() {
+            const select = document.getElementById('builder-sector-filter'); const listContainer = document.getElementById('builder-process-list');
+            if (!select || !listContainer) return;
+            const sectors = [...new Set(appState.processes.map(p => p.sector))].filter(Boolean);
+            const currentVal = select.value; select.innerHTML = `<option value="Todos">Todos os Setores</option>` + sectors.map(s => `<option value="${s}">${s}</option>`).join('');
+            if (sectors.includes(currentVal)) select.value = currentVal;
+            listContainer.innerHTML = '';
+            const filtered = select.value === 'Todos' ? appState.processes : appState.processes.filter(p => p.sector === select.value);
+            filtered.forEach(p => {
+                const item = document.createElement('div'); item.className = "flex justify-between items-center p-3 bg-white border border-gray-200 rounded-xl hover:bg-brand-light hover:border-brand-mustard shadow-sm transition-all cursor-pointer group"; item.onclick = () => addProcessToIT(p);
+                item.innerHTML = `<div><p class="text-xs font-bold text-ios-text group-hover:text-brand-brown">${p.title}</p><p class="text-[10px] text-ios-subtext">${p.steps.length} etapa(s)</p></div><div class="bg-brand-light w-6 h-6 rounded-full flex items-center justify-center group-hover:bg-brand-mustard transition-colors"><i class="ph ph-plus text-brand-mustard group-hover:text-white"></i></div>`;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function addProcessToIT(processTemplate) {
+            const itProcess = JSON.parse(JSON.stringify(processTemplate));
+            itProcess.uid = 'step_' + Date.now() + Math.random(); 
+            itProcess.steps.forEach(s => { if(!s.photos) s.photos = []; if(!s.photoSize) s.photoSize = 80; });
+            appState.currentBuilderIT.steps.push(itProcess); renderBuilderSteps();
+        }
+        function removeProcessFromIT(uid) { appState.currentBuilderIT.steps = appState.currentBuilderIT.steps.filter(x => x.uid !== uid); renderBuilderSteps(); }
+
+        function resizeImageAndAdd(file, processUid, stepIdx) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    const MAX_SIZE = 250; let width = img.width, height = img.height;
+                    if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+                    else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+                    canvas.width = width; canvas.height = height; ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
+                    const process = appState.currentBuilderIT.steps.find(x => x.uid === processUid);
+                    if(process) { process.steps[stepIdx].photos.push(canvas.toDataURL('image/jpeg', 0.6)); renderBuilderSteps(); saveState(); }
+                }
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
+        }
+        function handlePhotoUpload(input, processUid, stepIdx) { if (input.files) { Array.from(input.files).forEach(f => resizeImageAndAdd(f, processUid, stepIdx)); } input.value = ''; }
+        function removePhoto(processUid, stepIdx, photoIdx) { const p = appState.currentBuilderIT.steps.find(x => x.uid === processUid); if(p) { p.steps[stepIdx].photos.splice(photoIdx, 1); renderBuilderSteps(); saveState(); } }
+
+        function renderBuilderSteps() {
+            const container = document.getElementById('builder-selected-steps'); const countLabel = document.getElementById('builder-count');
+            if (countLabel) countLabel.innerText = appState.currentBuilderIT.steps.length; if (!container) return;
+            if (appState.currentBuilderIT.steps.length === 0) { container.innerHTML = `<div class="text-center text-ios-subtext mt-32 flex flex-col items-center"><i class="ph ph-file-dashed text-5xl mb-3 opacity-50 text-brand-mustard"></i><p class="font-bold text-lg text-gray-400">IT Vazia</p></div>`; return; }
+            container.innerHTML = '';
+            appState.currentBuilderIT.steps.forEach((step, index) => {
+                let processCrit = 'green';
+                if (step.steps.some(s => s.criticality === 'red')) processCrit = 'red'; else if (step.steps.some(s => s.criticality === 'yellow')) processCrit = 'yellow';
+                let bgHeaderClass = processCrit === 'red' ? 'bg-red-100 border-red-300' : (processCrit === 'yellow' ? 'bg-yellow-100 border-yellow-300' : 'bg-green-100 border-green-300');
+                let icon = processCrit === 'red' ? '🔴' : (processCrit === 'yellow' ? '🟡' : '🟢');
+
+                const block = document.createElement('div'); block.className = "mb-6 border border-gray-300 rounded-xl overflow-hidden bg-white shadow-md border-b-[4px] border-b-brand-mustard";
+                
+                const headerHtml = `
+                    <div class="${bgHeaderClass} px-4 py-3 flex justify-between items-center border-b">
+                        <div class="font-bold text-sm flex items-center gap-2 text-gray-800"><span>${icon}</span><span class="bg-brand-mustard text-white w-6 h-6 rounded flex items-center justify-center text-xs shadow-sm">${index + 1}</span><span class="uppercase tracking-wide">${step.title}</span></div>
+                        <div class="flex gap-2"><button onclick="addITStepAction('${step.uid}')" class="px-2 py-1 bg-white text-[10px] text-brand-mustard font-bold border border-brand-mustard rounded hover:bg-brand-light transition-colors"><i class="ph ph-plus"></i> Linha</button><button onclick="removeProcessFromIT('${step.uid}')" class="text-red-400 hover:text-red-600 bg-white border border-red-100 p-1 rounded transition-colors"><i class="ph ph-trash text-lg"></i></button></div>
+                    </div>`;
+
+                const tableHeadHtml = `
+                    <div class="hidden lg:grid grid-cols-12 gap-2 px-4 py-2 bg-white border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase tracking-wider shadow-sm z-10">
+                        <div class="col-span-1 text-center">Criticidade</div><div class="col-span-3">Ação (Como Fazer)</div><div class="col-span-2">Ponto Crítico</div>
+                        <div class="col-span-1">Frequência</div><div class="col-span-2">Recursos</div><div class="col-span-3 pl-2">Anexos / Mídias</div>
+                    </div>`;
+
+                let stepRowsHtml = step.steps.map((s, idx) => {
+                    let critColorClass = s.criticality === 'red' ? 'bg-red-50 text-red-700 border-red-200' : (s.criticality === 'yellow' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-green-50 text-green-700 border-green-200');
+                    let photosHtml = (s.photos || []).map((photoData, pIdx) => `<div class="relative group inline-block mr-1 mb-1"><img src="${photoData}" style="width: ${s.photoSize || 80}px; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;" class="shadow-sm"><button onclick="removePhoto('${step.uid}', ${idx}, ${pIdx})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100"><i class="ph-fill ph-x text-[8px]"></i></button></div>`).join('');
+
+                    let tableHtml = '';
+                    if (s.table) {
+                        let rHtml = s.table.map((row, rI) => { return `<tr>` + row.map((col, cI) => `<td class="border border-gray-300 p-0"><input class="w-full text-[10px] p-1 outline-none bg-transparent ${rI===0?'font-bold bg-brand-light':''}" value="${col}" oninput="manageTable('builder', '${step.uid}', ${idx}, 'update', ${rI}, ${cI}, this.value)"></td>`).join('') + `</tr>`; }).join('');
+                        tableHtml = `<div class="mt-2 bg-white p-1 rounded border border-brand-mustard/30 w-full col-span-12"><div class="flex justify-between items-center mb-1 bg-gray-50 p-1 rounded"><span class="text-[9px] font-bold text-brand-brown uppercase">Tabela Auxiliar</span><div class="flex gap-1"><button onclick="manageTable('builder', '${step.uid}', ${idx}, 'add-row')" class="text-[9px] border border-gray-300 bg-white px-1 rounded">+ Linha</button><button onclick="manageTable('builder', '${step.uid}', ${idx}, 'add-col')" class="text-[9px] border border-gray-300 bg-white px-1 rounded">+ Coluna</button><button onclick="manageTable('builder', '${step.uid}', ${idx}, 'remove')" class="text-[9px] border border-gray-300 bg-white px-1 rounded text-red-500"><i class="ph ph-trash"></i></button></div></div><div class="overflow-x-auto"><table class="w-full border-collapse">${rHtml}</table></div></div>`;
+                    }
+
+                    return `
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 px-4 py-3 border-b border-gray-100 last:border-0 relative group items-start hover:bg-gray-50 transition-colors">
+                        <div class="col-span-1 flex lg:justify-center"><select class="text-center text-[10px] p-1 border rounded outline-none cursor-pointer w-full lg:w-auto appearance-none font-bold ${critColorClass}" onchange="updateITStepField('${step.uid}', ${idx}, 'criticality', this.value); renderBuilderSteps();"><option value="green" ${s.criticality === 'green' ? 'selected' : ''}>🟢 OK</option><option value="yellow" ${s.criticality === 'yellow' ? 'selected' : ''}>🟡 Mod</option><option value="red" ${s.criticality === 'red' ? 'selected' : ''}>🔴 Crit</option></select></div>
+                        <div class="col-span-3"><textarea class="w-full bg-transparent border border-transparent rounded p-1 text-xs outline-none focus:border-brand-mustard focus:bg-white resize-none h-14" oninput="updateITStepField('${step.uid}', ${idx}, 'action', this.value)" placeholder="Descreva a ação...">${s.action}</textarea></div>
+                        <div class="col-span-2"><textarea class="w-full bg-transparent border border-transparent rounded p-1 text-xs outline-none focus:border-brand-mustard focus:bg-white resize-none h-14" oninput="updateITStepField('${step.uid}', ${idx}, 'critText', this.value)" placeholder="Detalhe o risco...">${s.critText || ''}</textarea></div>
+                        <div class="col-span-1"><textarea class="w-full bg-transparent border border-transparent rounded p-1 text-[10px] outline-none focus:border-brand-mustard focus:bg-white resize-none h-14" oninput="updateITStepField('${step.uid}', ${idx}, 'freq', this.value)" placeholder="Frequência">${s.freq || ''}</textarea></div>
+                        <div class="col-span-2"><textarea class="w-full bg-transparent border border-transparent rounded p-1 text-[10px] outline-none focus:border-brand-mustard focus:bg-white resize-none h-14" oninput="updateITStepField('${step.uid}', ${idx}, 'resources', this.value)" placeholder="Recursos">${s.resources || ''}</textarea></div>
+                        <div class="col-span-3 pl-2 border-l border-gray-200 flex flex-col justify-start min-h-[56px]"><div class="flex flex-wrap mb-1">${photosHtml}</div>
+                            <div class="flex items-center gap-1 mt-auto pt-1 w-full"><label class="cursor-pointer text-[10px] text-brand-mustard font-bold flex items-center gap-1 hover:underline bg-brand-light px-2 py-1 rounded border border-brand-mustard/30 transition-colors"><i class="ph ph-camera"></i> Foto<input type="file" accept="image/*" multiple class="hidden" onchange="handlePhotoUpload(this, '${step.uid}', ${idx})"></label>
+                                ${s.photos && s.photos.length > 0 ? `<div class="flex items-center gap-1 ml-1 bg-gray-50 px-1 py-1 rounded border border-gray-200"><i class="ph ph-image text-gray-400 text-[10px]"></i><input type="range" min="40" max="300" value="${s.photoSize || 80}" onchange="updateITStepField('${step.uid}', ${idx}, 'photoSize', this.value); renderBuilderSteps();" class="w-12 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer"></div>` : ''}
+                                <button onclick="manageTable('builder', '${step.uid}', ${idx}, 'create')" class="cursor-pointer text-[10px] text-brand-mustard font-bold flex items-center gap-1 hover:underline bg-brand-light px-2 py-1 rounded border border-brand-mustard/30 transition-colors"><i class="ph ph-table"></i> Tabela</button>
+                                <button onclick="removeITStepAction('${step.uid}', ${idx})" class="text-gray-300 hover:text-red-500 ml-auto opacity-0 group-hover:opacity-100"><i class="ph-fill ph-trash text-sm"></i></button>
+                            </div>
+                        </div>${tableHtml}
+                    </div>`;
+                }).join('');
+
+                block.innerHTML = headerHtml + tableHeadHtml + stepRowsHtml; container.appendChild(block);
+            });
+        }
+
+        function updateITStepField(processUid, stepIdx, field, newValue) { const p = appState.currentBuilderIT.steps.find(x => x.uid === processUid); if(p) p.steps[stepIdx][field] = newValue; }
+        function removeITStepAction(processUid, stepIdx) { const p = appState.currentBuilderIT.steps.find(x => x.uid === processUid); if(p) { p.steps.splice(stepIdx, 1); if (p.steps.length === 0) removeProcessFromIT(processUid); else renderBuilderSteps(); } }
+        function addITStepAction(processUid) { const p = appState.currentBuilderIT.steps.find(x => x.uid === processUid); if(p) { p.steps.push({ action: '', criticality: 'green', critText: '', freq: '', resources: '', photos: [], photoSize: 80 }); renderBuilderSteps(); } }
+        
+        function clearBuilder() {
+            if(confirm('Limpar o formulário?')) {
+                ['num', 'title', 'sector', 'date', 'machines', 'epis', 'resources', 'elab', 'rev', 'aprov'].forEach(id => document.getElementById(`it-${id}`).value = '');
+                appState.currentBuilderIT = { id: null, revision: 0, steps: [] }; renderBuilderSteps();
+            }
+        }
+
+        function loadITIntoBuilder(it) {
+            document.getElementById('it-num').value = it.header.numero || ''; document.getElementById('it-title').value = it.header.titulo || '';
+            document.getElementById('it-sector').value = it.header.setor || ''; document.getElementById('it-date').value = it.header.data || '';
+            document.getElementById('it-machines').value = it.header.maquinas || ''; document.getElementById('it-epis').value = it.header.epis || '';
+            document.getElementById('it-resources').value = it.header.recursos || ''; document.getElementById('it-elab').value = it.header.elab || '';
+            document.getElementById('it-rev').value = it.header.rev || ''; document.getElementById('it-aprov').value = it.header.aprov || '';
+            appState.currentBuilderIT = { id: it.id, revision: it.revision + 1, steps: JSON.parse(JSON.stringify(it.steps)) };
+            renderBuilderSteps(); nav('builder');
+        }
+
+        function saveIT() {
+            const header = {
+                numero: document.getElementById('it-num').value, titulo: document.getElementById('it-title').value,
+                setor: document.getElementById('it-sector').value, data: document.getElementById('it-date').value,
+                maquinas: document.getElementById('it-machines').value, epis: document.getElementById('it-epis').value,
+                recursos: document.getElementById('it-resources').value, elab: document.getElementById('it-elab').value,
+                rev: document.getElementById('it-rev').value, aprov: document.getElementById('it-aprov').value,
+            };
+            if(!header.numero || !header.titulo) return alert('Preencha Número e Título.');
+            if(appState.currentBuilderIT.steps.length === 0) return alert('Adicione pelo menos uma etapa.');
+
+            const isUpdate = !!appState.currentBuilderIT.id;
+            const newIT = { id: isUpdate ? appState.currentBuilderIT.id : 'it_' + Date.now(), revision: appState.currentBuilderIT.revision, status: 'Vigente', lastUpdate: new Date().toLocaleDateString('pt-BR'), header: header, steps: appState.currentBuilderIT.steps, history: [] };
+
+            if (isUpdate) {
+                const oldItIndex = appState.its.findIndex(x => x.id === newIT.id);
+                if (oldItIndex > -1) {
+                    const oldIt = appState.its[oldItIndex]; const snapshot = JSON.parse(JSON.stringify(oldIt));
+                    snapshot.status = 'Obsoleta'; snapshot.history = []; newIT.history = oldIt.history || []; newIT.history.push(snapshot);
+                    appState.its[oldItIndex] = newIT;
+                }
+            } else appState.its.push(newIT);
+
+            saveState();
+            ['num', 'title', 'sector', 'date', 'machines', 'epis', 'resources', 'elab', 'rev', 'aprov'].forEach(id => document.getElementById(`it-${id}`).value = '');
+            appState.currentBuilderIT = { id: null, revision: 0, steps: [] };
+            nav('its');
+        }
+
+        function renderITs() {
+            const tbody = document.getElementById('its-table-body'); tbody.innerHTML = '';
+            if(appState.its.length === 0) { tbody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-ios-subtext">Nenhuma IT.</td></tr>`; return; }
+            [...appState.its].reverse().forEach(it => {
+                const tr = document.createElement('tr'); tr.className = "hover:bg-brand-light transition-colors";
+                tr.innerHTML = `<td class="px-6 py-4 font-bold text-brand-brown">${it.header.numero}</td><td class="px-6 py-4 text-ios-text font-medium">${it.header.titulo}</td><td class="px-6 py-4 text-ios-subtext">${it.header.setor}</td><td class="px-6 py-4 text-center"><span class="bg-white text-brand-brown text-xs font-bold px-2 py-1 rounded-full border border-gray-200 shadow-sm">Rev ${it.revision.toString().padStart(2, '0')}</span></td><td class="px-6 py-4"><span class="bg-green-100 text-green-800 text-[10px] uppercase font-bold px-2 py-1 rounded-full">Vigente</span></td><td class="px-6 py-4 text-right space-x-2"><button onclick="openPreviewModal('${it.id}')" class="text-gray-500 hover:text-brand-mustard bg-white border border-gray-200 shadow-sm p-2 rounded-lg transition-colors"><i class="ph ph-eye text-lg"></i></button><button onclick="openHistoryModal('${it.id}')" class="text-gray-500 hover:text-brand-brown bg-white border border-gray-200 shadow-sm p-2 rounded-lg transition-colors"><i class="ph ph-magnifying-glass text-lg"></i></button><button onclick="loadITForEdit('${it.id}')" class="text-gray-500 hover:text-orange-500 bg-white border border-gray-200 shadow-sm p-2 rounded-lg transition-colors"><i class="ph ph-pencil-simple text-lg"></i></button><button onclick="confirmDeleteIT('${it.id}')" class="text-gray-500 hover:text-red-500 bg-white border border-gray-200 shadow-sm p-2 rounded-lg transition-colors"><i class="ph ph-trash text-lg"></i></button></td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        let itToDelete = null;
+        function confirmDeleteIT(id) {
+            itToDelete = id; document.getElementById('delete-modal').classList.remove('hidden');
+            setTimeout(() => { document.getElementById('delete-modal-box').classList.remove('scale-95'); document.getElementById('delete-modal-box').classList.add('scale-100'); }, 10);
+            document.getElementById('confirm-delete-btn').onclick = function() { appState.its = appState.its.filter(x => x.id !== itToDelete); saveState(); renderITs(); closeDeleteModal(); };
+        }
+        function closeDeleteModal() {
+            document.getElementById('delete-modal-box').classList.remove('scale-100'); document.getElementById('delete-modal-box').classList.add('scale-95');
+            setTimeout(() => { document.getElementById('delete-modal').classList.add('hidden'); itToDelete = null; }, 200);
+        }
+
+        function openHistoryModal(id) {
+            const it = appState.its.find(x => x.id === id); if(!it) return;
+            const listContainer = document.getElementById('history-list'); listContainer.innerHTML = '';
+            if(!it.history || it.history.length === 0) { listContainer.innerHTML = `<div class="text-center py-10"><p>Nenhum histórico encontrado.</p></div>`; } 
+            else {
+                [...it.history].reverse().forEach(hist => {
+                    listContainer.innerHTML += `<div class="bg-white p-4 rounded-xl shadow-sm border border-ios-border flex justify-between items-center hover:border-brand-mustard transition-colors"><div><div class="flex items-center gap-2 mb-1"><span class="bg-gray-200 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Obsoleta</span><span class="font-bold text-brand-brown">Rev ${hist.revision.toString().padStart(2, '0')}</span></div><p class="text-sm font-medium text-gray-800">${hist.header.titulo}</p></div><button onclick='openPreviewModal(null, ${JSON.stringify(hist).replace(/'/g, "&#39;")})' class="px-3 py-1.5 bg-brand-light text-brand-brown rounded-lg text-xs font-bold border border-brand-mustard/30">Ver Documento</button></div>`;
+                });
+            }
+            document.getElementById('history-modal').classList.remove('hidden'); setTimeout(() => { document.getElementById('history-modal-box').classList.remove('scale-95'); document.getElementById('history-modal-box').classList.add('scale-100'); }, 10);
+        }
+        function closeHistoryModal() { document.getElementById('history-modal-box').classList.remove('scale-100'); document.getElementById('history-modal-box').classList.add('scale-95'); setTimeout(() => document.getElementById('history-modal').classList.add('hidden'), 200); }
+
+        // --- PREVIEW E IMPRESSÃO (PDF) ---
+        let currentITForPrint = null;
+        function openPreviewModal(id, historyObj = null) {
+            const it = historyObj ? historyObj : appState.its.find(x => x.id === id); if(!it) return; currentITForPrint = it;
+            document.getElementById('preview-content').innerHTML = generatePrintHTML(it);
+            document.getElementById('preview-modal').classList.remove('hidden'); setTimeout(() => { document.getElementById('preview-modal-box').classList.remove('scale-95'); document.getElementById('preview-modal-box').classList.add('scale-100'); }, 10);
+        }
+        function closePreviewModal() { document.getElementById('preview-modal-box').classList.remove('scale-100'); document.getElementById('preview-modal-box').classList.add('scale-95'); setTimeout(() => { document.getElementById('preview-modal').classList.add('hidden'); currentITForPrint = null; }, 200); }
+        function printFromPreview() { if(!currentITForPrint) return; document.getElementById('print-area').innerHTML = generatePrintHTML(currentITForPrint); setTimeout(() => window.print(), 300); }
+
+        function generatePrintHTML(it) {
+            let rowsHtml = '';
+            it.steps.forEach((process, pIndex) => {
+                let processCrit = 'green';
+                if (process.steps.some(s => s.criticality === 'red')) processCrit = 'red'; else if (process.steps.some(s => s.criticality === 'yellow')) processCrit = 'yellow';
+                let critIcon = processCrit === 'red' ? '🔴' : (processCrit === 'yellow' ? '🟡' : '🟢');
+                let bgCritColor = processCrit === 'red' ? '#fee2e2' : (processCrit === 'yellow' ? '#fef08a' : '#dcfce7');
+
+                process.steps.forEach((step, sIndex) => {
+                    let photosHtml = '';
+                    if (step.photos && step.photos.length > 0) {
+                        let pSize = step.photoSize || 80;
+                        photosHtml = `<div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px; justify-content: center;">` + step.photos.map(img => `<img src="${img}" style="width: ${pSize}px; height: auto; object-fit: contain; border: 1px solid #ccc; border-radius: 4px;">`).join('') + `</div>`;
+                    }
+                    let tablePrintHtml = '';
+                    if (step.table && step.table.length > 0) {
+                        let rHtml = step.table.map((row, rIdx) => `<tr>` + row.map(col => `<td style="padding:2px 4px; border:1px solid #000; ${rIdx === 0 ? 'background-color:#e5e7eb; font-weight:bold; text-align:center;' : ''}">${col}</td>`).join('') + `</tr>`).join('');
+                        tablePrintHtml = `<table style="width:100%; margin-top:6px; margin-bottom:2px; font-size:9px; border-collapse:collapse; border:1px solid #000;">${rHtml}</table>`;
+                    }
+
+                    let borderStyle = (sIndex === process.steps.length - 1) ? 'border-bottom: 2.5px solid #000;' : 'border-bottom: 1px solid #000;';
+
+                    rowsHtml += `<tr>`;
+                    if (sIndex === 0) rowsHtml += `<td class="font-bold" rowspan="${process.steps.length}" style="vertical-align: middle; text-align: center; width: 120px; background-color: ${bgCritColor} !important; -webkit-print-color-adjust: exact; border-bottom: 2.5px solid #000; border-top: 1px solid #000; border-left: 1px solid #000; border-right: 1px solid #000;"><span style="font-size: 16px;">${critIcon}</span><br><br>${pIndex + 1}. ${process.title}</td>`;
+                    rowsHtml += `<td style="vertical-align: top; width: 30%; border-left: 1px solid #000; border-right: 1px solid #000; ${borderStyle}">${step.action} ${tablePrintHtml}</td>
+                        <td style="vertical-align: top; width: 15%; border-left: 1px solid #000; border-right: 1px solid #000; ${borderStyle}">${step.critText || ''}</td>
+                        <td style="vertical-align: top; text-align:center; width: 10%; border-left: 1px solid #000; border-right: 1px solid #000; ${borderStyle}">${step.freq || ''}</td>
+                        <td style="vertical-align: top; width: 15%; border-left: 1px solid #000; border-right: 1px solid #000; ${borderStyle}">${step.resources || ''}</td>
+                        <td style="vertical-align: top; width: 20%; border-left: 1px solid #000; border-right: 1px solid #000; text-align: center; ${borderStyle}">${photosHtml}</td></tr>`;
+                });
+            });
+
+            return `
+                <style>.print-bg-brown { background-color: #5D4037 !important; color: #FFFFFF !important; -webkit-print-color-adjust: exact; }</style>
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-family: Arial, sans-serif;">
+                    <tr><td rowspan="2" style="width: 20%; text-align: center; vertical-align: middle; padding: 5px; border: 1px solid #000; background-color: #FFFFFF;">${appState.settings.logo ? `<img src="${appState.settings.logo}" style="max-height: 80px; max-width: 100%; object-fit: contain; margin: 0 auto; display: block;">` : '<div style="font-weight:bold; font-size:14px; color:#5D4037;">LOGO DA EMPRESA</div>'}</td>
+                        <td colspan="4" style="text-align: center; font-weight: bold; font-size: 14px; text-transform: uppercase; border: 1px solid #000; padding: 6px;" class="print-bg-brown">INSTRUÇÃO DE TRABALHO - ${it.header.titulo}</td>
+                        <td style="width: 20%; text-align: center; font-weight: bold; font-size: 12px; border: 1px solid #000; padding: 6px;" class="print-bg-brown">Nº IT</td></tr>
+                    <tr><td colspan="4" style="text-align: center; font-size: 10px; border: 1px solid #000; padding: 4px;"><strong>Revisão:</strong> ${it.revision.toString().padStart(2, '0')} | <strong>Data de Emissão:</strong> ${it.lastUpdate}</td>
+                        <td style="text-align: center; font-weight: bold; font-size: 14px; color: #5D4037; border: 1px solid #000; padding: 4px;">${it.header.numero}</td></tr>
+                    <tr class="print-bg-brown text-center font-bold" style="font-size: 9px;">
+                        <td style="width: 15%; border: 1px solid #000; padding: 4px;">SETOR</td><td style="width: 20%; border: 1px solid #000; padding: 4px;">MÁQUINAS / LINHA</td><td style="width: 15%; border: 1px solid #000; padding: 4px;">PROCESSO</td>
+                        <td style="width: 20%; border: 1px solid #000; padding: 4px;">EPI'S OBRIGATÓRIOS</td><td style="width: 15%; border: 1px solid #000; padding: 4px;">DATA IMPL.</td><td style="width: 15%; border: 1px solid #000; padding: 4px;">RECURSOS GERAIS</td></tr>
+                    <tr class="text-center" style="vertical-align: top; font-size: 9px;"><td style="border: 1px solid #000; padding: 4px;">${it.header.setor}</td><td style="border: 1px solid #000; padding: 4px;">${it.header.maquinas}</td><td style="border: 1px solid #000; padding: 4px;">Produção</td><td style="border: 1px solid #000; padding: 4px;">${it.header.epis}</td><td style="border: 1px solid #000; padding: 4px;">${it.header.data}</td><td style="border: 1px solid #000; padding: 4px;">${it.header.recursos}</td></tr>
+                </table>
+                <table style="margin-bottom: 10px; text-align: center; font-size: 9px; width: 100%; border-collapse: collapse;">
+                    <tr class="print-bg-brown font-bold"><td style="width: 33%; border: 1px solid #000; padding: 4px;">Elaborado Por:</td><td style="width: 33%; border: 1px solid #000; padding: 4px;">Revisado Por:</td><td style="width: 33%; border: 1px solid #000; padding: 4px;">Aprovado Por:</td></tr>
+                    <tr><td style="padding-top: 20px; padding-bottom: 5px; vertical-align: bottom; border: 1px solid #000;">${it.header.elab}</td><td style="padding-top: 20px; padding-bottom: 5px; vertical-align: bottom; border: 1px solid #000;">${it.header.rev}</td><td style="padding-top: 20px; padding-bottom: 5px; vertical-align: bottom; border: 1px solid #000;">${it.header.aprov}</td></tr>
+                </table>
+                <div style="border: 1px solid #000; padding: 4px; margin-bottom: 10px;"><span style="font-weight: bold; background: #e5e7eb; padding: 2px 6px; display: inline-block; margin-bottom: 4px; font-size: 9px;">LEGENDA DE CRITICIDADE</span><div style="display: flex; justify-content: space-between; font-size: 9px; font-weight: bold;"><span style="color: #166534;">🟢 SEM RISCOS</span><span style="color: #854d0e;">🟡 OPERAÇÃO MODERADA (Impacto Controlado)</span><span style="color: #991b1b;">🔴 OPERAÇÃO CRÍTICA (Risco à Qualidade/Segurança)</span></div></div>
+                <table style="font-size: 9px; width: 100%; border-collapse: collapse; border: 1px solid #000;">
+                    <thead><tr class="print-bg-brown text-center font-bold"><td colspan="6" style="padding: 6px; border: 1px solid #000; font-size: 11px;">OPERAÇÕES / ESPECIFICAÇÕES - CONTROLE DE PROCESSAMENTO</td></tr>
+                        <tr class="print-bg-brown font-bold text-center"><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Etapa</td><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Como (Ação)</td><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Ponto Crítico</td><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Frequência</td><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Recursos Específicos</td><td style="border: 1px solid #000; border-bottom: 2px solid #000; padding: 4px;">Fotos do Processo / Esquemas</td></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+            `;
+        }
+
+        // --- SISTEMA DE FLUXOGRAMA E APPCC ---
+        const diagramManager = {
+            currentDiagramId: null,
+            nodes: [], connections: [], selectedNodeId: null, connectingNodeId: null, mode: 'select', viewMode: 'summarized', isDragging: false, dragNodeId: null, startX: 0, startY: 0, initialX: 0, initialY: 0,
+            
+            init() {
+                if (!appState.diagrams) appState.diagrams = [];
+                if (appState.diagramsData && appState.diagramsData.nodes && appState.diagramsData.nodes.length > 0 && appState.diagrams.length === 0) {
+                    appState.diagrams.push({ id: 'diag_' + Date.now(), name: 'Fluxograma Antigo', data: { nodes: appState.diagramsData.nodes, connections: appState.diagramsData.connections } });
+                    appState.diagramsData = { nodes: [], connections: [] };
+                    saveState();
+                }
+                
+                this.renderDiagramsList();
+                if (appState.diagrams && appState.diagrams.length > 0) {
+                    this.loadDiagram(appState.diagrams[0].id);
+                } else {
+                    this.newDiagram();
+                }
+
+                const canvas = document.getElementById('diagram-canvas');
+                canvas.addEventListener('mousedown', (e) => { if (e.target.id === 'diagram-canvas' || e.target.id === 'diagram-svg') this.clearSelection(); });
+                document.addEventListener('mousemove', (e) => this.onDrag(e));
+                document.addEventListener('mouseup', () => this.stopDrag());
+            },
+
+            newDiagram() {
+                if(this.nodes.length > 0 && confirm("Deseja salvar o fluxo atual antes de criar um novo?")) {
+                    this.saveDiagram();
+                }
+                this.currentDiagramId = null;
+                this.nodes = [];
+                this.connections = [];
+                this.selectedNodeId = null;
+                const titleInput = document.querySelector('#diagram-print-header input');
+                if(titleInput) titleInput.value = "NOVO FLUXOGRAMA";
+                this.renderNodes();
+                this.renderDiagramsList();
+            },
+
+            loadDiagram(id) {
+                const diag = appState.diagrams.find(d => d.id === id);
+                if (diag) {
+                    this.currentDiagramId = diag.id;
+                    this.nodes = JSON.parse(JSON.stringify(diag.data.nodes || []));
+                    this.connections = JSON.parse(JSON.stringify(diag.data.connections || []));
+                    this.selectedNodeId = null;
+                    const titleInput = document.querySelector('#diagram-print-header input');
+                    if(titleInput) titleInput.value = diag.name || "FLUXOGRAMA DE PROCESSO";
+                    this.renderNodes();
+                    this.renderDiagramsList();
+                }
+            },
+
+            deleteDiagramFromList(id, event) {
+                event.stopPropagation();
+                if (confirm("Excluir este fluxo salvo?")) {
+                    appState.diagrams = appState.diagrams.filter(d => d.id !== id);
+                    if (this.currentDiagramId === id) this.newDiagram();
+                    saveState();
+                    this.renderDiagramsList();
+                }
+            },
+
+            saveDiagram() {
+                let titleInput = document.querySelector('#diagram-print-header input');
+                let title = titleInput ? titleInput.value : "Fluxograma Salvo";
+                if (!appState.diagrams) appState.diagrams = [];
+                if (!this.currentDiagramId) this.currentDiagramId = 'diag_' + Date.now();
+                
+                const idx = appState.diagrams.findIndex(d => d.id === this.currentDiagramId);
+                const diagramData = { nodes: JSON.parse(JSON.stringify(this.nodes)), connections: JSON.parse(JSON.stringify(this.connections)) };
+                
+                if (idx > -1) {
+                    appState.diagrams[idx].name = title;
+                    appState.diagrams[idx].data = diagramData;
+                } else {
+                    appState.diagrams.push({ id: this.currentDiagramId, name: title, data: diagramData });
+                }
+                
+                saveState();
+                alert("Fluxograma salvo com sucesso!");
+                this.renderDiagramsList();
+            },
+
+            renderDiagramsList() {
+                const container = document.getElementById('saved-diagrams-list');
+                if(!container) return;
+                container.innerHTML = '';
+                if(!appState.diagrams || appState.diagrams.length === 0) {
+                    container.innerHTML = '<p class="text-[10px] text-gray-400 italic text-center py-2">Nenhum salvo.</p>';
+                    return;
+                }
+                appState.diagrams.forEach(diag => {
+                    const isActive = this.currentDiagramId === diag.id;
+                    const el = document.createElement('div');
+                    el.className = `flex justify-between items-center p-2 rounded cursor-pointer border ${isActive ? 'bg-brand-light border-brand-mustard' : 'bg-white hover:bg-gray-50 border-gray-200'} mb-1`;
+                    el.onclick = () => this.loadDiagram(diag.id);
+                    el.innerHTML = `<span class="text-[10px] font-bold ${isActive ? 'text-brand-brown' : 'text-gray-600'} truncate flex-1">${diag.name}</span>
+                        <button onclick="diagramManager.deleteDiagramFromList('${diag.id}', event)" class="text-red-400 hover:text-red-600 ml-1"><i class="ph-fill ph-trash text-xs"></i></button>`;
+                    container.appendChild(el);
+                });
+            },
+
+            toggleViewMode() {
+                const btn = document.getElementById('btn-toggle-diagram-view');
+                const canvas = document.getElementById('diagram-canvas');
+                if(this.viewMode === 'summarized') {
+                    this.viewMode = 'detailed';
+                    btn.innerHTML = '<i class="ph-fill ph-eye"></i> Modo: Detalhado';
+                    btn.classList.add('bg-brand-mustard', 'text-white', 'border-brand-mustard'); btn.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-200');
+                    canvas.classList.add('view-detailed');
+                } else {
+                    this.viewMode = 'summarized';
+                    btn.innerHTML = '<i class="ph-fill ph-eye-closed"></i> Modo: Resumido';
+                    btn.classList.remove('bg-brand-mustard', 'text-white', 'border-brand-mustard'); btn.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+                    canvas.classList.remove('view-detailed');
+                }
+                setTimeout(() => this.renderConnections(), 10); 
+            },
+
+            addNode(type) {
+                const scrollContainer = document.getElementById('diagram-scroll-container');
+                const id = 'node_' + Date.now() + Math.random().toString(36).substr(2, 9);
+                let text = "Novo Bloco", desc = "", classes = "diagram-node ", bgColor = "";
+                
+                if (type === 'start') { text = "Início/Fim"; classes += "node-start"; bgColor = "#E5E7EB"; }
+                if (type === 'process') { text = "Processo"; classes += "node-process"; bgColor = "#E0F2FE"; }
+                if (type === 'decision') { text = "Decisão?"; classes += "node-decision"; bgColor = "#F3E8FF"; }
+                if (type === 'pc') { text = "PC (Controle)"; classes += "node-pc"; bgColor = "#FEF08A"; }
+                if (type === 'pcc') { text = "PCC (Crítico)"; classes += "node-pcc"; bgColor = "#FEE2E2"; }
+
+                const snap = 20;
+                // Calculando o centro exato da visão atual do usuário
+                const cx = (scrollContainer && scrollContainer.clientWidth > 0) ? scrollContainer.scrollLeft + scrollContainer.clientWidth/2 : 2000;
+                const cy = (scrollContainer && scrollContainer.clientHeight > 0) ? scrollContainer.scrollTop + scrollContainer.clientHeight/2 : 2000;
+
+                let nx = Math.round((cx - 80) / snap) * snap;
+                let ny = Math.round((cy - 40) / snap) * snap;
+
+                const node = { id, type, text, desc, bgColor, x: nx, y: ny, classes };
+                this.nodes.push(node); this.renderNodes(); this.selectNode(id); 
+            },
+
+            importImage(input) {
+                if (input.files && input.files.length > 0) {
+                    const file = input.files[0]; const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                            const MAX_SIZE = 400; let width = img.width, height = img.height;
+                            if (width > height) { if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; } } 
+                            else { if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; } }
+                            canvas.width = width; canvas.height = height;
+                            ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, width, height); ctx.drawImage(img, 0, 0, width, height);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            
+                            const scrollContainer = document.getElementById('diagram-scroll-container');
+                            const id = 'node_' + Date.now();
+                            
+                            const cx = (scrollContainer && scrollContainer.clientWidth > 0) ? scrollContainer.scrollLeft + scrollContainer.clientWidth/2 : 2000;
+                            const cy = (scrollContainer && scrollContainer.clientHeight > 0) ? scrollContainer.scrollTop + scrollContainer.clientHeight/2 : 2000;
+
+                            const node = { id, type: 'image', src: dataUrl, imgSize: 100, x: cx - 50, y: cy - 50, classes: 'diagram-node node-image' };
+                            this.nodes.push(node); this.renderNodes(); this.selectNode(id);
+                        }
+                        img.src = e.target.result;
+                    }
+                    reader.readAsDataURL(file);
+                }
+                input.value = '';
+            },
+
+            renderNodes() {
+                const canvas = document.getElementById('diagram-canvas');
+                canvas.querySelectorAll('.diagram-node').forEach(el => el.remove());
+
+                this.nodes.forEach(node => {
+                    const el = document.createElement('div');
+                    el.className = node.classes + (this.selectedNodeId === node.id ? ' selected' : '');
+                    el.id = node.id; el.style.left = node.x + 'px'; el.style.top = node.y + 'px';
+                    
+                    if (node.type === 'image') {
+                        el.innerHTML = `<img src="${node.src}" style="width:${node.imgSize}px; height:auto; pointer-events:none;" class="rounded shadow-sm">`;
+                    } else if (node.type === 'decision') {
+                        const strokeColor = this.selectedNodeId === node.id ? '#000000' : '#9CA3AF';
+                        const strokeWidth = this.selectedNodeId === node.id ? '4' : '2';
+                        el.innerHTML = `
+                            <svg style="position:absolute; top:0; left:0; width:100%; height:100%; z-index:-1;" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                <polygon points="50,2 98,50 50,98 2,50" fill="${node.bgColor || '#F3E8FF'}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>
+                            </svg>
+                            <div style="z-index:1; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                <div class="node-title">${node.text}</div>
+                                <div class="node-desc">${node.desc || 'Sem descrição.'}</div>
+                            </div>
+                        `;
+                    } else {
+                        el.innerHTML = `<div class="node-title">${node.text}</div><div class="node-desc">${node.desc || 'Sem descrição.'}</div>`;
+                        if(node.bgColor) el.style.backgroundColor = node.bgColor;
+                    }
+                    
+                    el.onmousedown = (e) => { e.stopPropagation(); this.startDragOrConnect(e, node.id); };
+                    canvas.appendChild(el);
+                });
+                
+                setTimeout(() => this.renderConnections(), 10);
+            },
+
+            startDragOrConnect(e, id) {
+                if (this.mode === 'connect') {
+                    if (!this.connectingNodeId) {
+                        this.connectingNodeId = id;
+                        document.getElementById(id).classList.add('ring-4', 'ring-brand-mustard');
+                        document.getElementById('connect-hint').innerText = "Agora clique no bloco de destino.";
+                    } else {
+                        if (this.connectingNodeId !== id) { this.connections.push({ from: this.connectingNodeId, to: id }); }
+                        this.connectingNodeId = null; this.toggleConnectMode(); this.renderNodes();
+                    }
+                    return;
+                }
+                this.isDragging = true; this.dragNodeId = id; this.selectNode(id);
+                this.startX = e.clientX; this.startY = e.clientY;
+                const node = this.nodes.find(n => n.id === id); this.initialX = node.x; this.initialY = node.y;
+            },
+
+            onDrag(e) {
+                if(!this.isDragging) return;
+                
+                const dx = e.clientX - this.startX; const dy = e.clientY - this.startY;
+                const node = this.nodes.find(n => n.id === this.dragNodeId);
+                
+                const snap = 20; 
+                node.x = Math.round((this.initialX + dx) / snap) * snap;
+                node.y = Math.round((this.initialY + dy) / snap) * snap;
+                
+                const el = document.getElementById(this.dragNodeId);
+                if(el) { el.style.left = node.x + 'px'; el.style.top = node.y + 'px'; }
+                this.renderConnections();
+            },
+
+            stopDrag() { this.isDragging = false; this.dragNodeId = null; },
+
+            selectNode(id) {
+                document.querySelectorAll('.diagram-node').forEach(el => {
+                    el.classList.remove('selected');
+                    if(el.classList.contains('node-decision')) {
+                        const pol = el.querySelector('polygon');
+                        if(pol) { pol.setAttribute('stroke', '#A855F7'); pol.setAttribute('stroke-width', '2'); }
+                    }
+                });
+
+                this.selectedNodeId = id;
+                const targetEl = document.getElementById(id);
+                if(targetEl) {
+                    targetEl.classList.add('selected');
+                    if(targetEl.classList.contains('node-decision')) {
+                        const pol = targetEl.querySelector('polygon');
+                        if(pol) { pol.setAttribute('stroke', '#000000'); pol.setAttribute('stroke-width', '4'); }
+                    }
+                }
+                
+                const panel = document.getElementById('edit-text-panel');
+                panel.classList.remove('opacity-50', 'pointer-events-none');
+
+                const inputTitle = document.getElementById('node-text-input');
+                const inputDesc = document.getElementById('node-desc-input');
+                const resizer = document.getElementById('diagram-img-resizer');
+                const node = this.nodes.find(n => n.id === id);
+                
+                if (node.type === 'image') {
+                    inputTitle.disabled = true; inputTitle.value = "Imagem Selecionada";
+                    inputDesc.disabled = true; inputDesc.value = "";
+                    resizer.classList.remove('hidden'); document.getElementById('node-size-input').value = node.imgSize || 100;
+                } else {
+                    inputTitle.disabled = false; inputTitle.value = node.text;
+                    inputDesc.disabled = false; inputDesc.value = node.desc || "";
+                    resizer.classList.add('hidden'); inputTitle.focus();
+                }
+            },
+
+            clearSelection() {
+                this.selectedNodeId = null;
+                document.querySelectorAll('.diagram-node').forEach(el => {
+                    el.classList.remove('selected');
+                    if(el.classList.contains('node-decision')) {
+                        const pol = el.querySelector('polygon');
+                        if(pol) { pol.setAttribute('stroke', '#A855F7'); pol.setAttribute('stroke-width', '2'); }
+                    }
+                });
+                
+                const panel = document.getElementById('edit-text-panel');
+                panel.classList.add('opacity-50', 'pointer-events-none');
+                
+                document.getElementById('node-text-input').disabled = true; document.getElementById('node-text-input').value = '';
+                document.getElementById('node-desc-input').disabled = true; document.getElementById('node-desc-input').value = '';
+                document.getElementById('diagram-img-resizer').classList.add('hidden');
+            },
+
+            updateText(newText) {
+                if (this.selectedNodeId) {
+                    const node = this.nodes.find(n => n.id === this.selectedNodeId);
+                    if(node && node.type !== 'image') {
+                        node.text = newText;
+                        const el = document.getElementById(this.selectedNodeId);
+                        if(el) { const titleEl = el.querySelector('.node-title'); if(titleEl) titleEl.innerText = newText; }
+                        this.renderConnections(); 
+                    }
+                }
+            },
+
+            updateDescription(newDesc) {
+                if (this.selectedNodeId) {
+                    const node = this.nodes.find(n => n.id === this.selectedNodeId);
+                    if(node && node.type !== 'image') {
+                        node.desc = newDesc;
+                        const el = document.getElementById(this.selectedNodeId);
+                        if(el) { const descEl = el.querySelector('.node-desc'); if(descEl) descEl.innerText = newDesc || 'Sem descrição.'; }
+                        this.renderConnections(); 
+                    }
+                }
+            },
+
+            changeColor(hex) {
+                if (this.selectedNodeId) {
+                    const node = this.nodes.find(n => n.id === this.selectedNodeId);
+                    if(node && node.type !== 'image') {
+                        node.bgColor = hex;
+                        const el = document.getElementById(node.id);
+                        if(el) {
+                            if(node.type === 'decision') {
+                                const pol = el.querySelector('polygon');
+                                if(pol) pol.setAttribute('fill', hex);
+                            } else {
+                                el.style.backgroundColor = hex;
+                            }
+                        }
+                    }
+                }
+            },
+
+            changeImageSize(size) {
+                if (this.selectedNodeId) {
+                    const node = this.nodes.find(n => n.id === this.selectedNodeId);
+                    if(node && node.type === 'image') {
+                        node.imgSize = size;
+                        const el = document.getElementById(node.id);
+                        if(el) {
+                            const img = el.querySelector('img');
+                            if(img) img.style.width = size + 'px';
+                        }
+                        this.renderConnections();
+                    }
+                }
+            },
+
+            deleteSelectedNode() {
+                if (this.selectedNodeId) {
+                    this.nodes = this.nodes.filter(n => n.id !== this.selectedNodeId);
+                    this.connections = this.connections.filter(c => c.from !== this.selectedNodeId && c.to !== this.selectedNodeId);
+                    this.clearSelection();
+                    this.renderNodes();
+                }
+            },
+
+            toggleConnectMode() {
+                const btn = document.getElementById('btn-toggle-connect'); const hint = document.getElementById('connect-hint');
+                if (this.mode === 'select') {
+                    this.mode = 'connect'; this.connectingNodeId = null;
+                    btn.classList.add('bg-brand-mustard', 'text-white'); btn.classList.remove('bg-white', 'text-gray-800');
+                    hint.classList.remove('hidden'); hint.innerText = "Selecione o 1º bloco para iniciar a ligação.";
+                } else {
+                    this.mode = 'select'; this.connectingNodeId = null;
+                    btn.classList.remove('bg-brand-mustard', 'text-white'); btn.classList.add('bg-white', 'text-gray-800');
+                    hint.classList.add('hidden'); this.renderNodes();
+                }
+            },
+
+            renderConnections() {
+                const svg = document.getElementById('svg-lines'); svg.innerHTML = '';
+                this.connections.forEach(conn => {
+                    const fromNode = this.nodes.find(n => n.id === conn.from); const toNode = this.nodes.find(n => n.id === conn.to);
+                    if (!fromNode || !toNode) return;
+
+                    const fromEl = document.getElementById(conn.from); const toEl = document.getElementById(conn.to);
+                    if(!fromEl || !toEl) return;
+
+                    const fRect = { left: fromNode.x, right: fromNode.x + fromEl.offsetWidth, top: fromNode.y, bottom: fromNode.y + fromEl.offsetHeight, cx: fromNode.x + fromEl.offsetWidth / 2, cy: fromNode.y + fromEl.offsetHeight / 2 };
+                    const tRect = { left: toNode.x, right: toNode.x + toEl.offsetWidth, top: toNode.y, bottom: toNode.y + toEl.offsetHeight, cx: toNode.x + toEl.offsetWidth / 2, cy: toNode.y + toEl.offsetHeight / 2 };
+
+                    const dx = tRect.cx - fRect.cx; const dy = tRect.cy - fRect.cy;
+                    let startX, startY, endX, endY, pathD;
+
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        startX = dx > 0 ? fRect.right : fRect.left; startY = fRect.cy;
+                        endX = dx > 0 ? tRect.left : tRect.right; endY = tRect.cy;
+                        
+                        if(Math.abs(startY - endY) <= 30) { startY = endY = (startY + endY) / 2; }
+                        
+                        const midX = (startX + endX) / 2;
+                        pathD = `M ${startX} ${startY} L ${midX} ${startY} L ${midX} ${endY} L ${endX} ${endY}`;
+                    } else {
+                        startX = fRect.cx; startY = dy > 0 ? fRect.bottom : fRect.top;
+                        endX = tRect.cx; endY = dy > 0 ? tRect.top : tRect.bottom;
+                        
+                        if(Math.abs(startX - endX) <= 30) { startX = endX = (startX + endX) / 2; }
+                        
+                        const midY = (startY + endY) / 2;
+                        pathD = `M ${startX} ${startY} L ${startX} ${midY} L ${endX} ${midY} L ${endX} ${endY}`;
+                    }
+
+                    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    path.setAttribute("d", pathD); path.setAttribute("fill", "none");
+                    path.setAttribute("stroke", "#000000"); path.setAttribute("stroke-width", "2");
+                    path.setAttribute("marker-end", "url(#arrowhead)");
+                    svg.appendChild(path);
+                });
+            },
+
+            exportDiagram() {
+                this.clearSelection(); 
+                if (this.nodes.length === 0) return alert("O fluxograma está vazio.");
+
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                this.nodes.forEach(n => {
+                    const el = document.getElementById(n.id);
+                    const w = el ? el.offsetWidth : 160; const h = el ? el.offsetHeight : 80;
+                    if (n.x < minX) minX = n.x; if (n.y < minY) minY = n.y;
+                    if (n.x + w > maxX) maxX = n.x + w; if (n.y + h > maxY) maxY = n.y + h;
+                });
+                const pad = 60; minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+                const w = maxX - minX; const h = maxY - minY;
+
+                this.nodes.forEach(n => { n.x -= minX; n.y -= minY; });
+                this.renderNodes();
+
+                const canvasWrapper = document.getElementById('diagram-canvas');
+                const scrollContainer = document.getElementById('diagram-scroll-container');
+                const exportArea = document.getElementById('diagram-export-area');
+                
+                const originalWidth = canvasWrapper.style.width; 
+                const originalHeight = canvasWrapper.style.height; 
+                const originalBg = canvasWrapper.style.backgroundImage;
+                const originalOverflow = scrollContainer.style.overflow;
+                
+                canvasWrapper.style.width = w + 'px'; 
+                canvasWrapper.style.height = h + 'px';
+                canvasWrapper.style.backgroundImage = 'none'; 
+                canvasWrapper.style.backgroundColor = '#FFFFFF';
+                
+                const originalExportW = exportArea.style.width;
+                const originalExportH = exportArea.style.height;
+                const originalExportFlex = exportArea.style.flex;
+                
+                exportArea.style.flex = 'none';
+                exportArea.style.width = Math.max(w, 800) + 'px'; 
+                exportArea.style.height = 'max-content';
+                
+                scrollContainer.style.overflow = 'visible'; 
+
+                setTimeout(() => {
+                    html2canvas(exportArea, { scale: 2 }).then(canvas => {
+                        this.nodes.forEach(n => { n.x += minX; n.y += minY; });
+                        canvasWrapper.style.width = originalWidth; 
+                        canvasWrapper.style.height = originalHeight; 
+                        canvasWrapper.style.backgroundImage = originalBg;
+                        exportArea.style.width = originalExportW;
+                        exportArea.style.height = originalExportH;
+                        exportArea.style.flex = originalExportFlex;
+                        scrollContainer.style.overflow = originalOverflow;
+                        this.renderNodes();
+
+                        const link = document.createElement('a'); link.download = 'Fluxograma-APPCC.jpg';
+                        link.href = canvas.toDataURL('image/jpeg', 0.9); link.click();
+                    });
+                }, 100);
+            }
+        };
+
+        function loadMockData() {
+            appState.processes = [
+                {
+                    id: 'p_mock1',
+                    title: 'Pré – Fermento',
+                    sector: 'Pré-Assados',
+                    steps: [
+                        { action: 'Receber o Kit ingredientes do pré-fermento do Estoque.', critText: 'Controle (Padronização): Tempo para atingir a fermentação.', criticality: 'yellow', freq: 'Todo Lote', resources: 'Balde, balança', photos: [], table: [['Ingrediente', 'Qtd (Kg)'], ['Farinha Especial', '15.0'], ['Água Gelada', '8.0']] },
+                        { action: 'Pesar todos os ingredientes ANTES de colocar no balde', critText: '', criticality: 'green', freq: '', resources: '', photos: [] }
+                    ]
+                }
+            ];
+            saveState();
+        }
+
+        window.onload = init;
     </script>
-
-    <!-- Marca d'água -->
-    <div class="fixed bottom-3 right-4 text-xs font-medium text-slate-500/50 select-none pointer-events-none z-50">
-        Desenvolvido por Jan Gabriel
-    </div>
 </body>
 </html>
