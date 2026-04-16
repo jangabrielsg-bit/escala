@@ -10,8 +10,6 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <!-- HTML2Canvas para exportar fluxogramas -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <!-- DagreJS para autolayout IA topológica -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
     
     <script>
         tailwind.config = {
@@ -288,9 +286,6 @@
                     </button>
                     <button onclick="diagramManager.saveDiagram()" class="px-4 py-2 text-xs bg-green-600 text-white rounded-lg font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2">
                         <i class="ph ph-floppy-disk"></i> Salvar Fluxo
-                    </button>
-                    <button onclick="diagramManager.autoLayout()" class="px-4 py-2 text-xs bg-indigo-600 text-white rounded-lg font-bold shadow-sm hover:bg-indigo-700 transition-colors flex items-center gap-2">
-                        <i class="ph ph-magic-wand"></i> IA: Organizar
                     </button>
                     <button onclick="diagramManager.newDiagram()" class="px-4 py-2 text-xs text-red-500 hover:bg-red-50 border border-red-200 rounded-lg font-bold transition-colors">Novo / Limpar</button>
                     <button onclick="diagramManager.exportDiagram()" class="px-4 py-2 text-xs bg-brand-brown text-white rounded-lg font-bold shadow-sm hover:bg-opacity-90 transition-colors flex items-center gap-2"><i class="ph ph-download-simple"></i> Exportar Imagem</button>
@@ -1050,57 +1045,6 @@
                 }
             },
 
-            autoLayout() {
-                if(typeof dagre === 'undefined') return alert('A IA de topologia estrutural (Dagre) não carregou.');
-                if(!confirm("A IA irá redesenhar as posições matemáticas de todos os blocos alinhando tudo para o eixo perfeitamente hierárquico, substituindo sua customização artística. Deseja prosseguir de qualquer forma?")) return;
-                
-                this.saveHistoryState();
-                var g = new dagre.graphlib.Graph();
-                g.setGraph({ rankdir: 'TB', nodesep: 50, ranksep: 100, marginx: 0, marginy: 0 });
-                g.setDefaultEdgeLabel(function() { return {}; });
-
-                this.nodes.forEach(n => {
-                    const el = document.getElementById(n.id);
-                    const w = el ? el.offsetWidth : 160;
-                    const h = el ? el.offsetHeight : 80;
-                    g.setNode(n.id, { width: w, height: h });
-                });
-
-                this.connections.forEach(c => {
-                    g.setEdge(c.from, c.to);
-                });
-
-                dagre.layout(g);
-
-                g.nodes().forEach(v => {
-                    const dNode = g.node(v);
-                    const myNode = this.nodes.find(n => n.id === v);
-                    if(myNode && dNode) {
-                        myNode.x = Math.round(dNode.x);
-                        myNode.y = Math.round(dNode.y);
-                    }
-                });
-
-                const scrollContainer = document.getElementById('diagram-scroll-container');
-                const cx = (scrollContainer && scrollContainer.clientWidth > 0) ? scrollContainer.scrollLeft + scrollContainer.clientWidth/2 : 2000;
-                const cy = (scrollContainer && scrollContainer.clientHeight > 0) ? scrollContainer.scrollTop + scrollContainer.clientHeight/2 : 2000;
-
-                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-                this.nodes.forEach(n => { 
-                    if(n.x < minX) minX = n.x; if(n.y < minY) minY = n.y;
-                    if(n.x > maxX) maxX = n.x; if(n.y > maxY) maxY = n.y;
-                });
-
-                if(minX !== Infinity) {
-                    const offsetCenterX = cx - ((maxX - minX)/2 + minX);
-                    const offsetCenterY = Math.max(30, cy - ((maxY - minY)/2 + minY) - 100);
-                    this.nodes.forEach(n => { n.x += offsetCenterX; n.y += offsetCenterY; });
-                    this.connections.forEach(c => { c.labelOffsetX = 0; c.labelOffsetY = 0; });
-                }
-
-                this.renderNodes();
-            },
-
             init() {
                 if (!appState.diagrams) appState.diagrams = [];
                 if (appState.diagramsData && appState.diagramsData.nodes && appState.diagramsData.nodes.length > 0 && appState.diagrams.length === 0) {
@@ -1549,6 +1493,7 @@
 
             renderConnections() {
                 const svg = document.getElementById('svg-lines'); svg.innerHTML = '';
+                document.querySelectorAll('.conn-label').forEach(el => el.remove());
                 this.connections.forEach(conn => {
                     const fromNode = this.nodes.find(n => n.id === conn.from); const toNode = this.nodes.find(n => n.id === conn.to);
                     if (!fromNode || !toNode) return;
@@ -1589,7 +1534,8 @@
                     // Etiqueta de texto para a conexão com Z-index elevado (50) acima do SVG
                     const labelX = ((fRect.cx + tRect.cx) / 2) + (conn.labelOffsetX || 0);
                     const labelY = ((fRect.cy + tRect.cy) / 2) + (conn.labelOffsetY || 0);
-                    let textHtml = `<div onmousedown="diagramManager.startDragLabel(event, '${conn.from}-${conn.to}')" onclick="diagramManager.editConnectionLabel('${conn.from}-${conn.to}')" style="position: absolute; left: ${labelX}px; top: ${labelY}px; transform: translate(-50%, -50%); cursor: grab; background: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: ${conn.label ? '#5D4037' : '#9CA3AF'}; border: 1px solid ${conn.label ? '#D4A373' : 'transparent'}; z-index: 50; text-align: center;" class="hover:border-brand-mustard transition-colors min-w-[30px] whitespace-nowrap shadow-sm">${conn.label || '+ lig'}</div>`;
+                    const ignoreHtml = !conn.label ? 'data-html2canvas-ignore="true"' : '';
+                    let textHtml = `<div ${ignoreHtml} onmousedown="diagramManager.startDragLabel(event, '${conn.from}-${conn.to}')" onclick="diagramManager.editConnectionLabel('${conn.from}-${conn.to}')" style="position: absolute; left: ${labelX}px; top: ${labelY}px; transform: translate(-50%, -50%); cursor: grab; background: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: ${conn.label ? '#5D4037' : '#9CA3AF'}; border: 1px solid ${conn.label ? '#D4A373' : 'transparent'}; z-index: 50; text-align: center;" class="conn-label hover:border-brand-mustard transition-colors min-w-[30px] whitespace-nowrap shadow-sm">${conn.label || '+ lig'}</div>`;
                     document.getElementById('diagram-canvas').insertAdjacentHTML('beforeend', textHtml);
                 });
             },
