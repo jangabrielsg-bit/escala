@@ -238,12 +238,32 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="processes-grid"></div>
         </section>
 
-        <!-- TELA 4: Fluxogramas / APPCC -->
-        <section id="view-diagrams" class="view-section p-6 mx-auto h-full w-full hidden flex-col">
+        <!-- TELA 4: DASHBOARD DE FLUXOGRAMAS -->
+        <section id="view-diagrams" class="view-section p-8 max-w-6xl mx-auto hidden block">
+            <div class="flex justify-between items-end mb-6">
+                <div>
+                    <h2 class="text-3xl font-bold text-ios-text">Meus Fluxogramas</h2>
+                    <p class="text-ios-subtext mt-1">Sua galeria de mapas e desenhos APPCC salvos. Escolha um para continuar de onde parou.</p>
+                </div>
+                <button onclick="diagramManager.newDiagram()" class="px-5 py-3 bg-brand-mustard text-white rounded-xl font-bold shadow hover:bg-opacity-90 transition-colors flex items-center gap-2">
+                    <i class="ph ph-plus text-lg"></i> Novo Fluxograma
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="diagrams-dashboard-grid">
+                <!-- Preenchido via JS -->
+            </div>
+        </section>
+
+        <!-- TELA 4.1: EDITOR DE FLUXOGRAMAS -->
+        <section id="view-diagram-editor" class="view-section p-6 mx-auto h-full w-full hidden flex-col">
             <div class="flex justify-between items-end mb-4 shrink-0">
                 <div>
-                    <h2 class="text-2xl font-bold text-ios-text">Editor de Fluxogramas e APPCC</h2>
-                    <p class="text-ios-subtext text-sm mt-1">Espaço infinito para desenhar. Selecione um bloco para editar o texto e ver mudar ao vivo.</p>
+                    <h2 class="text-2xl font-bold text-ios-text flex items-center gap-3">
+                        <button onclick="nav('diagrams')" class="text-gray-400 hover:text-brand-brown transition-colors" title="Voltar ao Quadro"><i class="ph ph-arrow-left"></i></button>
+                        Editor de Fluxogramas e APPCC
+                    </h2>
+                    <p class="text-ios-subtext text-sm mt-1 ml-9">Espaço infinito para desenhar. Selecione um bloco para editar o texto e ver mudar ao vivo.</p>
                 </div>
                 <div class="flex gap-2">
                     <button id="btn-toggle-diagram-view" onclick="diagramManager.toggleViewMode()" class="px-4 py-2 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold transition-colors flex items-center gap-2">
@@ -523,30 +543,35 @@
 
         // --- NAVEGAÇÃO SEGURA ---
         function nav(viewId) {
-            const views = ['its', 'builder', 'processes', 'diagrams', 'config'];
+            const views = ['its', 'builder', 'processes', 'diagrams', 'diagram-editor', 'config'];
             
             views.forEach(v => {
                 const el = document.getElementById('view-' + v);
                 if (el) {
                     if (v === viewId) {
                         el.classList.remove('hidden');
-                        if (v === 'diagrams') el.classList.add('flex');
+                        if (v === 'diagram-editor') el.classList.add('flex');
+                        if (v === 'diagrams') el.classList.add('block');
                     } else {
                         el.classList.add('hidden');
-                        if (v === 'diagrams') el.classList.remove('flex');
+                        if (v === 'diagram-editor') el.classList.remove('flex');
+                        if (v === 'diagrams') el.classList.remove('block');
                     }
                 }
             });
             
             document.querySelectorAll('.nav-btn').forEach(el => el.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors");
-            const btn = document.getElementById('nav-' + viewId);
+            
+            let activeNavId = viewId === 'diagram-editor' ? 'diagrams' : viewId;
+            const btn = document.getElementById('nav-' + activeNavId);
             if(btn) btn.className = "nav-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium bg-brand-light text-brand-brown transition-colors";
 
             if (viewId === 'builder') renderBuilderProcessList();
             if (viewId === 'its') renderITs();
             if (viewId === 'processes') renderProcesses();
+            if (viewId === 'diagrams') diagramManager.renderDashboard();
             
-            if (viewId === 'diagrams') {
+            if (viewId === 'diagram-editor') {
                 setTimeout(() => {
                     const sc = document.getElementById('diagram-scroll-container');
                     if (sc && sc.dataset.centered !== 'true') {
@@ -989,6 +1014,7 @@
                 if(titleInput) titleInput.value = "NOVO FLUXOGRAMA";
                 this.renderNodes();
                 this.renderDiagramsList();
+                nav('diagram-editor');
             },
 
             loadDiagram(id) {
@@ -1002,6 +1028,7 @@
                     if(titleInput) titleInput.value = diag.name || "FLUXOGRAMA DE PROCESSO";
                     this.renderNodes();
                     this.renderDiagramsList();
+                    nav('diagram-editor');
                 }
             },
 
@@ -1052,6 +1079,36 @@
                     el.innerHTML = `<span class="text-[10px] font-bold ${isActive ? 'text-brand-brown' : 'text-gray-600'} truncate flex-1">${diag.name}</span>
                         <button onclick="diagramManager.deleteDiagramFromList('${diag.id}', event)" class="text-red-400 hover:text-red-600 ml-1"><i class="ph-fill ph-trash text-xs"></i></button>`;
                     container.appendChild(el);
+                });
+            },
+
+            renderDashboard() {
+                const grid = document.getElementById('diagrams-dashboard-grid');
+                if(!grid) return;
+                grid.innerHTML = '';
+                if(!appState.diagrams || appState.diagrams.length === 0) {
+                    grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-400"><i class="ph ph-magnifying-glass text-4xl mb-3 opacity-50 block mx-auto"></i><p class="mt-2">Você ainda não salvou nenhum fluxograma.</p><p class="text-xs">Crie o seu primeiro usando o botão acima!</p></div>';
+                    return;
+                }
+                appState.diagrams.forEach(diag => {
+                    const card = document.createElement('div');
+                    card.className = "ios-card p-5 hover:shadow-lg transition-shadow relative border border-gray-200 hover:border-brand-mustard group cursor-pointer flex flex-col h-40 bg-white rounded-xl";
+                    card.onclick = () => this.loadDiagram(diag.id);
+                    
+                    const dt = diag.updatedAt || new Date().toLocaleDateString();
+                    const nNodes = diag.data?.nodes?.length || 0;
+                    
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-3">
+                            <h4 class="font-bold text-brand-brown text-lg leading-tight line-clamp-2">${diag.name}</h4>
+                            <button onclick="diagramManager.deleteDiagramFromList('${diag.id}', event)" class="text-red-400 hover:text-red-600 bg-red-50 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity ml-2 shrink-0"><i class="ph-fill ph-trash text-sm"></i></button>
+                        </div>
+                        <div class="mt-auto flex justify-between items-end border-t border-gray-100 pt-3">
+                            <p class="text-xs text-ios-subtext flex items-center gap-1 font-medium bg-gray-100 px-2 py-1 rounded-md"><i class="ph-fill ph-check-square-offset"></i> ${nNodes} blocos</p>
+                            <p class="text-[10px] text-gray-400">Atualizado: ${dt}</p>
+                        </div>
+                    `;
+                    grid.appendChild(card);
                 });
             },
 
@@ -1406,13 +1463,17 @@
                 const originalExportFlex = exportArea.style.flex;
                 
                 exportArea.style.flex = 'none';
-                exportArea.style.width = Math.max(w, 800) + 'px'; 
-                exportArea.style.height = 'max-content';
+                
+                const targetW = Math.max(w, 1920);
+                const targetH = Math.max(h + 150, 1080);
+                
+                exportArea.style.width = targetW + 'px'; 
+                exportArea.style.height = targetH + 'px';
                 
                 scrollContainer.style.overflow = 'visible'; 
 
                 setTimeout(() => {
-                    html2canvas(exportArea, { scale: 2 }).then(canvas => {
+                    html2canvas(exportArea, { scale: 3 }).then(canvas => {
                         this.nodes.forEach(n => { n.x += minX; n.y += minY; });
                         canvasWrapper.style.width = originalWidth; 
                         canvasWrapper.style.height = originalHeight; 
