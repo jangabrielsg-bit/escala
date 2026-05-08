@@ -186,6 +186,7 @@
                         appLayout.classList.remove('hidden');
                         appLayout.classList.add('flex');
                         setupListeners();
+                        window.app.render(); // Força o render inicial para evitar tela em branco
                     } else {
                         state.user = null;
                         appLayout.classList.add('hidden');
@@ -206,44 +207,45 @@
             unsubscribeFuncs.forEach(unsub => unsub());
             const publicPath = `artifacts/${appId}/public/data`;
             
+            // Adicionado state.view === 'dashboard' para forçar a re-renderização inicial dos totais
             unsubscribeFuncs.push(onSnapshot(doc(db, `${publicPath}/settings`, 'main'), (docSnap) => {
                 if (docSnap.exists()) {
                     state.settings = docSnap.data();
                     if(!state.settings.permissions) state.settings.permissions = [];
                 }
-                if(state.view === 'configuracoes' || state.view === 'relatorios') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'configuracoes' || state.view === 'relatorios') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/employees`)), (snap) => {
                 state.employees = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                if(state.view === 'colaboradores' || state.view === 'lancamentos' || state.view === 'higiene') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'colaboradores' || state.view === 'lancamentos' || state.view === 'higiene') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/sectors`)), (snap) => {
                 state.sectors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 if(state.sectors.length === 0) window.app.populateInitialSectors();
-                if(state.view === 'setores' || state.view === 'colaboradores' || state.view === 'lancamentos' || state.view === 'indicadores') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'setores' || state.view === 'colaboradores' || state.view === 'lancamentos' || state.view === 'indicadores') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/rules`)), (snap) => {
                 state.rules = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 if(state.rules.length === 0) window.app.populateInitialRules();
-                if(state.view === 'setores' || state.view === 'lancamentos' || state.view === 'relatorios' || state.view === 'dashboard' || state.view === 'indicadores') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'setores' || state.view === 'lancamentos' || state.view === 'relatorios' || state.view === 'indicadores') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/logs`)), (snap) => {
                 state.logs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                if(state.view === 'lancamentos' || state.view === 'relatorios' || state.view === 'dashboard' || state.view === 'indicadores') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'lancamentos' || state.view === 'relatorios' || state.view === 'indicadores') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/prorations`)), (snap) => {
                 state.prorations = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                if(state.view === 'proporcionais' || state.view === 'relatorios') window.app.render();
+                if(state.view === 'dashboard' || state.view === 'proporcionais' || state.view === 'relatorios') window.app.render();
             }, (e) => console.error(e)));
 
             unsubscribeFuncs.push(onSnapshot(query(collection(db, `${publicPath}/hygiene_checks`)), (snap) => {
                 state.hygieneChecks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                if (state.view === 'higiene' || state.view === 'relatorios' || state.view === 'lancamentos' || state.view === 'indicadores') window.app.render();
+                if (state.view === 'dashboard' || state.view === 'higiene' || state.view === 'relatorios' || state.view === 'lancamentos' || state.view === 'indicadores') window.app.render();
             }, (e) => console.error(e)));
         };
 
@@ -360,7 +362,8 @@
                 if (!email) return ['admin', 'qualidade', 'producao', 'rh'];
                 
                 const perms = state.settings?.permissions || [];
-                const userPerm = perms.find(p => p.email.toLowerCase() === email);
+                // Uso do optional chaining `?.` evita crash caso um objeto da base de dados não tenha o e-mail preenchido
+                const userPerm = perms.find(p => p.email?.toLowerCase() === email);
                 return userPerm ? userPerm.roles : [];
             },
 
@@ -381,6 +384,213 @@
                 if (!canAccess[state.view]) {
                     state.view = 'dashboard';
                 }
+            },
+
+            // --- FUNÇÕES DE CÁLCULO GERAIS (Tiradas de Views.Relatorios para ficarem globais) ---
+            calculateMonthlyReport: (monthId) => {
+                const report = [];
+                state.employees.forEach(emp => {
+                    const sector = state.sectors.find(s => s.id === emp.sectorId);
+                    if(!sector) return;
+                    let baseValue = emp.role === 'lider' ? sector.val_lider : sector.val_liderado;
+                    if (emp.customBaseValue) baseValue = Number(emp.customBaseValue);
+                    const proration = state.prorations.find(p => p.employeeId === emp.id && p.monthId === monthId);
+                    let validBase = baseValue;
+                    let proportionMsg = "Mês Integral";
+                    if (proration) {
+                        validBase = baseValue * (proration.daysWorked / proration.totalDays);
+                        proportionMsg = `${proration.daysWorked}/${proration.totalDays} dias`;
+                    }
+                    const empLogs = state.logs.filter(l => l.employeeId === emp.id && l.monthId === monthId && !l.deleted);
+                    const empHygiene = state.hygieneChecks.filter(h => h.employeeId === emp.id && window.app.getSafeMonthId(h) === monthId && !h.deleted);
+                    
+                    let totalDeductionPct = 0;
+                    let isZerado = false;
+                    const errorCounts = {};
+                    
+                    empLogs.forEach(log => { 
+                        if (log.ruleId === 'zerar_gratificacao') {
+                            isZerado = true;
+                        } else {
+                            errorCounts[log.ruleId] = (errorCounts[log.ruleId] || 0) + 1; 
+                        }
+                    });
+                    
+                    if (empHygiene.length > 0) errorCounts['higiene'] = empHygiene.length;
+                    
+                    state.rules.forEach(rule => {
+                        const count = errorCounts[rule.id] || 0;
+                        totalDeductionPct += (Math.min(count, rule.max) * rule.pct);
+                    });
+                    
+                    if (isZerado) totalDeductionPct = 1;
+                    if (totalDeductionPct > 1) totalDeductionPct = 1;
+                    
+                    const finalValue = validBase - (validBase * totalDeductionPct);
+                    report.push({ emp, sectorName: sector.name, baseValue, validBase, proportionMsg, totalDeductionPct, finalValue });
+                });
+                return report.sort((a,b) => (a.sectorName||'').localeCompare(b.sectorName||'') || (a.emp.name||'').localeCompare(b.emp.name||''));
+            },
+
+            generateErrorLogsReportHtml: (monthId) => {
+                let html = '';
+                let sectorCount = 0;
+                [...state.sectors].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).forEach(sec => {
+                    const emps = state.employees.filter(e => e.sectorId === sec.id).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+                    if(emps.length === 0) return;
+                    let sectorLogsHtml = '';
+                    emps.forEach(emp => {
+                        const allLogs = [...state.logs.filter(l => l.employeeId === emp.id && l.monthId === monthId && !l.deleted), ...state.hygieneChecks.filter(h => h.employeeId === emp.id && window.app.getSafeMonthId(h) === monthId && !h.deleted).map(h => ({ ...h, ruleId: 'higiene' }))].sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
+                        
+                        let logsList = '';
+                        if(allLogs.length === 0) {
+                            logsList = `<li class="text-sm text-green-600 italic ml-2 border-l-2 border-green-400 pl-3 py-1 mb-2"><i class="fa-solid fa-check mr-1"></i> Nenhuma ocorrência registrada</li>`;
+                        } else {
+                            logsList = allLogs.map(l => {
+                                let ruleName = 'Desc.';
+                                let rulePct = 0;
+                                
+                                if (l.ruleId === 'zerar_gratificacao') {
+                                    ruleName = 'Zerar Gratificação';
+                                    rulePct = 1;
+                                } else if (l.ruleId === 'higiene') {
+                                    ruleName = 'Higiene Pessoal';
+                                    const hRule = state.rules.find(r => r.id === 'higiene');
+                                    rulePct = hRule ? hRule.pct : 0;
+                                } else {
+                                    const rule = state.rules.find(r => r.id === l.ruleId);
+                                    if (rule) { ruleName = rule.name; rulePct = rule.pct; }
+                                }
+                                
+                                const dateStr = l.date ? l.date.split('-').reverse().join('/') : '--/--/----';
+                                return `<li class="text-sm text-stone-700 ml-2 border-l-2 border-red-400 pl-3 py-1 mb-2"><span class="font-bold text-stone-500 mr-2">${dateStr}</span>${ruleName} <b class="text-red-500">(-${window.app.formatPct(rulePct)})</b>${l.obs?`<br><span class="text-xs italic text-stone-400 mt-1 block">Obs: ${l.obs}</span>`:''}</li>`;
+                            }).join('');
+                        }
+                        sectorLogsHtml += `<div class="mb-4 bg-white rounded-lg p-4 border border-stone-200" style="break-inside: avoid;"><p class="font-bold text-stone-800 text-base mb-3">${emp.name || 'Sem nome'}</p><ul>${logsList}</ul></div>`;
+                    });
+                    
+                    if(sectorLogsHtml) {
+                        const pageBreakStyle = sectorCount > 0 ? 'page-break-before: always;' : '';
+                        html += `<div class="mb-6" style="${pageBreakStyle}"><h3 class="bg-stone-100 text-stone-600 px-4 py-3 rounded-t-lg font-bold text-sm uppercase border border-stone-200 border-b-0">${sec.name}</h3><div class="p-4 border border-stone-200 rounded-b-lg bg-stone-50 grid grid-cols-1 md:grid-cols-2 gap-4">${sectorLogsHtml}</div></div>`;
+                        sectorCount++;
+                    }
+                });
+                return html || '<div class="p-8 text-center text-stone-400 text-sm border border-dashed border-stone-300 rounded-xl">Sem dados para exibir.</div>';
+            },
+
+            generateComparativeReportHtml: (monthId) => {
+                let [y, m] = monthId.split('-').map(Number);
+                let prevM = m - 1;
+                let prevY = y;
+                if (prevM === 0) { prevM = 12; prevY -= 1; }
+                const prevMonthId = `${prevY}-${String(prevM).padStart(2, '0')}`;
+
+                const currLogs = state.logs.filter(l => l.monthId === monthId && !l.deleted);
+                const currHyg = state.hygieneChecks.filter(h => window.app.getSafeMonthId(h) === monthId && !h.deleted);
+                const prevLogs = state.logs.filter(l => l.monthId === prevMonthId && !l.deleted);
+                const prevHyg = state.hygieneChecks.filter(h => window.app.getSafeMonthId(h) === prevMonthId && !h.deleted);
+
+                const currTotal = currLogs.length + currHyg.length;
+                const prevTotal = prevLogs.length + prevHyg.length;
+
+                const currSecCounts = {};
+                const prevSecCounts = {};
+                state.sectors.forEach(s => { currSecCounts[s.id] = 0; prevSecCounts[s.id] = 0; });
+
+                const countSectorLogs = (logs, hyg, countsObj) => {
+                    logs.forEach(l => {
+                        const emp = state.employees.find(e => e.id === l.employeeId);
+                        if(emp && countsObj[emp.sectorId] !== undefined) countsObj[emp.sectorId]++;
+                    });
+                    hyg.forEach(h => {
+                        const emp = state.employees.find(e => e.id === h.employeeId);
+                        if(emp && countsObj[emp.sectorId] !== undefined) countsObj[emp.sectorId]++;
+                    });
+                };
+                countSectorLogs(currLogs, currHyg, currSecCounts);
+                countSectorLogs(prevLogs, prevHyg, prevSecCounts);
+
+                const improvedSectors = [];
+                const worsenedSectors = [];
+                state.sectors.forEach(s => {
+                    const diff = currSecCounts[s.id] - prevSecCounts[s.id];
+                    if (diff < 0) improvedSectors.push({ name: s.name, diff: Math.abs(diff), curr: currSecCounts[s.id], prev: prevSecCounts[s.id] });
+                    else if (diff > 0) worsenedSectors.push({ name: s.name, diff, curr: currSecCounts[s.id], prev: prevSecCounts[s.id] });
+                });
+
+                const ruleCounts = {};
+                state.rules.forEach(r => ruleCounts[r.id] = { name: r.name, count: 0 });
+                
+                currLogs.forEach(l => {
+                    if (l.ruleId !== 'zerar_gratificacao' && ruleCounts[l.ruleId]) {
+                        ruleCounts[l.ruleId].count++;
+                    }
+                });
+                currHyg.forEach(h => {
+                    if (ruleCounts['higiene']) ruleCounts['higiene'].count++;
+                });
+
+                const activeRules = Object.values(ruleCounts).filter(r => r.count > 0).sort((a,b) => b.count - a.count);
+                const mostBroken = activeRules.length > 0 ? activeRules[0] : null;
+                const leastBroken = activeRules.length > 0 ? activeRules[activeRules.length - 1] : null;
+
+                let totalStatusHtml = '';
+                if (currTotal < prevTotal) {
+                    totalStatusHtml = `<span class="text-green-600 font-bold"><i class="fa-solid fa-arrow-trend-down"></i> Melhorou (${currTotal} vs ${prevTotal})</span>`;
+                } else if (currTotal > prevTotal) {
+                    totalStatusHtml = `<span class="text-red-600 font-bold"><i class="fa-solid fa-arrow-trend-up"></i> Piorou (${currTotal} vs ${prevTotal})</span>`;
+                } else {
+                    totalStatusHtml = `<span class="text-stone-500 font-bold"><i class="fa-solid fa-minus"></i> Manteve Estável (${currTotal})</span>`;
+                }
+
+                const formatSectorList = (list, isImproved) => {
+                    if(list.length === 0) return '<p class="text-sm text-stone-500 italic">Nenhum setor registrou essa variação.</p>';
+                    return list.map(s => `
+                        <div class="flex justify-between items-center py-2 border-b border-stone-100 last:border-0">
+                            <span class="text-sm font-bold text-stone-700">${s.name}</span>
+                            <span class="text-xs font-bold px-2 py-1 rounded ${isImproved ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                ${isImproved ? '-' : '+'}${s.diff} erro(s) <span class="font-normal opacity-75">(de ${s.prev} para ${s.curr})</span>
+                            </span>
+                        </div>
+                    `).join('');
+                };
+
+                return `
+                    <div class="bg-stone-50 p-6 rounded-xl border border-stone-200 mb-6">
+                        <h3 class="text-lg font-black text-stone-800 mb-4 border-b border-stone-200 pb-2"><i class="fa-solid fa-scale-unbalanced text-yellow-600 mr-2"></i> Evolução Geral (Atual vs Mês Anterior: ${prevMonthId})</h3>
+                        <div class="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-stone-200">
+                            <span class="text-stone-600 font-bold text-sm uppercase">Ocorrências Totais:</span>
+                            <span class="text-lg">${totalStatusHtml}</span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-5 rounded-xl border border-green-200 shadow-sm" style="break-inside: avoid;">
+                            <h4 class="text-green-700 font-black mb-4 flex items-center gap-2 uppercase text-sm"><i class="fa-solid fa-thumbs-up"></i> Setores que Melhoraram</h4>
+                            ${formatSectorList(improvedSectors, true)}
+                        </div>
+                        <div class="bg-white p-5 rounded-xl border border-red-200 shadow-sm" style="break-inside: avoid;">
+                            <h4 class="text-red-700 font-black mb-4 flex items-center gap-2 uppercase text-sm"><i class="fa-solid fa-thumbs-down"></i> Setores que Pioraram</h4>
+                            ${formatSectorList(worsenedSectors, false)}
+                        </div>
+                    </div>
+
+                    <div class="bg-stone-50 p-6 rounded-xl border border-stone-200" style="break-inside: avoid;">
+                        <h3 class="text-lg font-black text-stone-800 mb-4 border-b border-stone-200 pb-2"><i class="fa-solid fa-ranking-star text-yellow-600 mr-2"></i> Ranking de Regras Quebradas (Neste Mês)</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-red-200 flex flex-col items-center justify-center text-center">
+                                <span class="text-[10px] font-bold text-stone-400 uppercase mb-1">A Regra Mais Quebrada</span>
+                                <span class="text-red-600 font-black text-sm">${mostBroken ? mostBroken.name : 'Nenhuma infração registrada'}</span>
+                                ${mostBroken ? `<span class="text-xs text-red-500 bg-red-50 px-2 py-1 rounded font-bold mt-2">${mostBroken.count} ocorrência(s)</span>` : ''}
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow-sm border border-green-200 flex flex-col items-center justify-center text-center">
+                                <span class="text-[10px] font-bold text-stone-400 uppercase mb-1">A Regra Menos Quebrada (Mas Registrada)</span>
+                                <span class="text-green-600 font-black text-sm">${leastBroken ? leastBroken.name : 'Nenhuma infração registrada'}</span>
+                                ${leastBroken ? `<span class="text-xs text-green-600 bg-green-50 px-2 py-1 rounded font-bold mt-2">${leastBroken.count} ocorrência(s)</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
             },
 
             populateInitialSectors: async () => {
@@ -1437,7 +1647,7 @@
                                 ${isChecked ? `
                                 <div class="mt-3 animate-fade-in w-full">
                                     <input type="text" placeholder="Motivo (ex: sem touca)..." value="${obsValue}" data-empid="${emp.id}" data-date="${today}" class="hygiene-obs-input w-full text-xs p-2.5 border border-red-300 rounded-lg bg-red-50 outline-none text-red-900 placeholder-red-300 focus:border-red-500 shadow-inner">
-                                    ${infraction && infraction.registeredBy ? `<p class="text-[10px] text-red-600 mt-1"><i class="fa-solid fa-user-pen"></i> ${infraction.registeredBy}</p>` : ''}
+                                    ${infraction && infraction.registeredBy ? `<p class="text-[10px] text-red-600 mt-1"><i class="fa-solid fa-user-pen"></i> Registrado por: ${infraction.registeredBy}</p>` : ''}
                                 </div>
                                 ` : ''}
                             </div>`;
