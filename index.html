@@ -283,7 +283,7 @@
             openModal: (html) => {
                 document.getElementById('modals').innerHTML = `
                     <div class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay no-print">
-                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in text-stone-900">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-fade-in text-stone-900">
                             ${html}
                         </div>
                     </div>
@@ -296,7 +296,7 @@
 
             confirmAction: (msg, actionStr, dataId = '') => {
                 window.app.openModal(`
-                    <div class="p-6 text-center">
+                    <div class="p-6 text-center shrink-0">
                         <i class="fa-solid fa-circle-exclamation text-4xl text-yellow-500 mb-4"></i>
                         <p class="text-stone-800 font-bold mb-6">${msg}</p>
                         <div class="flex gap-2 pt-2">
@@ -309,10 +309,10 @@
 
             promptDeleteOccurrence: (id, type) => {
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-red-600"><i class="fa-solid fa-trash mr-2"></i>Excluir Ocorrência</h2>
                     </div>
-                    <form id="form-delete-occurrence" class="p-6 space-y-4 text-left">
+                    <form id="form-delete-occurrence" class="p-6 space-y-4 text-left overflow-y-auto custom-scrollbar flex-1">
                         <input type="hidden" id="del_occ_id" value="${id}">
                         <input type="hidden" id="del_occ_type" value="${type}">
                         <p class="text-sm text-stone-600 mb-2 leading-relaxed">Para excluir esta ocorrência, por favor informe a justificativa. O registro não será apagado permanentemente e será mantido no <span class="font-bold">histórico de excluídos</span>.</p>
@@ -767,11 +767,13 @@
                     const groupSecId = group.dataset.secid;
                     let hasVisible = false;
 
+                    // Filtrar por setor primeiro
                     if (sectorId !== '' && groupSecId !== sectorId) {
                         group.style.display = 'none';
                         return; 
                     }
 
+                    // Filtrar por nome dentro do setor visível
                     group.querySelectorAll('.higiene-emp-row').forEach(row => {
                         if (row.dataset.name.includes(term)) { 
                             row.style.display = 'flex'; 
@@ -802,7 +804,7 @@
 
                     const hygieneAsLogs = filteredHygiene.map(h => ({
                         id: h.id, employeeId: h.employeeId, date: h.date, ruleId: 'higiene', obs: h.obs, timestamp: h.timestamp, isHygiene: true,
-                        deleted: h.deleted, deleteReason: h.deleteReason, deletedBy: h.deletedBy, deletedAt: h.deletedAt, registeredBy: h.registeredBy
+                        deleted: h.deleted, deleteReason: h.deleteReason, deletedBy: h.deletedBy, deletedAt: h.deletedAt, registeredBy: h.registeredBy, registeredByEmail: h.registeredByEmail
                     }));
 
                     const allRecords = [...filteredLogs, ...hygieneAsLogs].sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));
@@ -821,44 +823,59 @@
                         const sec = state.sectors.find(s => s.id === emp?.sectorId);
                         const rule = state.rules.find(r => r.id === log.ruleId);
                         const dateStr = log.date ? log.date.split('-').reverse().join('/') : '--/--/----';
-                        const obsSnippet = log.obs ? `<div class="text-xs text-stone-600 bg-stone-50 p-2 rounded border border-stone-200 mt-2 italic">Obs: ${log.obs}</div>` : '';
-                        const registeredStr = log.registeredBy ? `<div class="text-[10px] text-stone-400 mt-2 pt-2 border-t border-stone-100 font-medium"><i class="fa-solid fa-user-pen mr-1"></i> Registrado por: ${log.registeredBy}</div>` : '';
+                        const deleteAction = log.isHygiene ? 'deleteHygieneRecord' : 'deleteLog';
                         
-                        const ruleName = log.ruleId === 'zerar_gratificacao' ? 'Zerado (100%)' : (rule ? rule.name : (log.isHygiene ? 'Higiene Pessoal' : 'Infração'));
+                        const ruleName = log.ruleId === 'zerar_gratificacao' ? 'Zerar Gratificação' : (rule ? rule.name : (log.isHygiene ? 'Higiene Pessoal' : 'Infração'));
+                        const catName = log.isHygiene ? 'Qualidade' : (rule ? rule.category : '');
+                        const catBadge = catName ? `<span class="bg-stone-100 border border-stone-200 text-stone-500 text-[10px] px-2 py-0.5 rounded font-bold uppercase">${catName}</span>` : '';
+
+                        let authorStr = '';
+                        if (log.registeredBy || log.registeredByEmail) {
+                            const name = log.registeredBy || log.registeredByEmail;
+                            const em = log.registeredByEmail ? `(${log.registeredByEmail})` : '';
+                            authorStr = `<div class="text-[10px] text-stone-400 mt-3 pt-2 border-t border-stone-100 flex items-center gap-1"><i class="fa-solid fa-user-pen"></i> Registrado por: ${name} ${name !== log.registeredByEmail ? em : ''}</div>`;
+                        }
 
                         if (isExcluidosTab) {
                             const deletedDate = log.deletedAt ? new Date(log.deletedAt).toLocaleString('pt-BR') : 'Desconhecido';
                             return `
-                                <div class="bg-red-50 p-4 rounded-xl border border-red-200 shadow-sm animate-fade-in relative flex flex-col justify-between">
-                                    <div class="pr-2">
-                                        <span class="text-[10px] font-bold text-red-500 uppercase"><i class="fa-solid fa-calendar mr-1"></i> ${dateStr}</span>
-                                        <h4 class="font-bold text-stone-800 text-sm mt-1 line-through opacity-70">${emp ? (emp.name || 'Sem Nome') : '<span class="text-red-500 italic">Colab. Excluído</span>'}</h4>
-                                        <div class="flex items-center gap-2 mt-1 flex-wrap opacity-70">
-                                            <span class="text-[10px] bg-stone-100 border px-1.5 rounded text-stone-500">${sec ? sec.name : 'N/A'}</span>
-                                            <span class="text-xs font-bold text-red-600 line-through">${ruleName}</span>
-                                        </div>
-                                        <div class="text-xs text-red-800 bg-red-100 p-2 rounded border border-red-200 mt-2">
-                                            <strong>Motivo da Exclusão:</strong> ${log.deleteReason || 'Não informado'}<br>
-                                            <span class="text-[10px] block mt-1"><i class="fa-solid fa-user-xmark"></i> Excluído por: ${log.deletedBy || 'Desconhecido'} em ${deletedDate}</span>
-                                        </div>
-                                        ${registeredStr}
+                                <div class="bg-red-50 p-5 rounded-xl border border-red-200 shadow-sm animate-fade-in relative flex flex-col justify-between">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <span class="text-xs font-bold text-red-500 flex items-center gap-1"><i class="fa-solid fa-calendar text-red-400"></i> ${dateStr}</span>
                                     </div>
+                                    
+                                    <h4 class="font-bold text-stone-800 text-base leading-tight mb-2 line-through opacity-70">${emp ? (emp.name || 'Sem Nome') : '<span class="text-red-500 italic">Colab. Excluído</span>'}</h4>
+                                    
+                                    <div class="flex items-center gap-2 flex-wrap mb-3 opacity-70">
+                                        ${catBadge}
+                                        <span class="text-sm font-bold text-red-600 line-through">${ruleName}</span>
+                                    </div>
+                                    
+                                    <div class="text-xs text-red-800 bg-red-100 p-3 rounded border border-red-200 mt-2">
+                                        <strong>Motivo da Exclusão:</strong> ${log.deleteReason || 'Não informado'}<br>
+                                        <span class="text-[10px] block mt-1"><i class="fa-solid fa-user-xmark"></i> Excluído por: ${log.deletedBy || 'Desconhecido'} em ${deletedDate}</span>
+                                    </div>
+                                    ${authorStr}
                                 </div>
                             `;
                         } else {
                             return `
-                                <div class="bg-white p-4 rounded-xl border border-stone-200 shadow-sm animate-fade-in relative flex flex-col justify-between">
-                                    <button data-action="promptDeleteOccurrence" data-id="${log.id}" data-type="${log.isHygiene ? 'hygiene' : 'log'}" class="absolute top-4 right-4 text-red-500 bg-stone-100 p-2 rounded hover:bg-red-50 transition-colors"><i class="fa-solid fa-trash"></i></button>
-                                    <div class="pr-10">
-                                        <span class="text-[10px] font-bold text-stone-400 uppercase"><i class="fa-solid fa-calendar mr-1"></i> ${dateStr}</span>
-                                        <h4 class="font-bold text-stone-800 text-sm mt-1">${emp ? (emp.name || 'Sem Nome') : '<span class="text-red-500 italic">Colab. Excluído</span>'}</h4>
-                                        <div class="flex items-center gap-2 mt-1 flex-wrap">
-                                            <span class="text-[10px] bg-stone-100 border px-1.5 rounded text-stone-500">${sec ? sec.name : 'N/A'}</span>
-                                            <span class="text-xs font-bold text-red-600">${ruleName}</span>
-                                        </div>
-                                        ${obsSnippet}
-                                        ${registeredStr}
+                                <div class="bg-white p-5 rounded-xl border border-stone-200 shadow-sm animate-fade-in relative flex flex-col justify-between">
+                                    <div class="flex justify-between items-start mb-2">
+                                        <span class="text-xs font-bold text-stone-500 flex items-center gap-1"><i class="fa-solid fa-calendar text-stone-400"></i> ${dateStr}</span>
+                                        <button data-action="promptDeleteOccurrence" data-id="${log.id}" data-type="${log.isHygiene ? 'hygiene' : 'log'}" class="text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 p-2 rounded transition-colors"><i class="fa-solid fa-trash"></i></button>
                                     </div>
+                                    
+                                    <h4 class="font-bold text-stone-800 text-base leading-tight mb-2">${emp ? (emp.name || 'Sem Nome') : '<span class="text-red-500 italic">Colab. Excluído</span>'}</h4>
+                                    
+                                    <div class="flex items-center gap-2 flex-wrap mb-3">
+                                        ${catBadge}
+                                        <span class="text-sm font-bold text-red-600">${ruleName}</span>
+                                    </div>
+                                    
+                                    ${log.obs ? `<div class="text-sm text-stone-600 bg-stone-50 p-3 rounded border border-stone-200 italic mb-2">Obs: ${log.obs}</div>` : ''}
+                                    
+                                    ${authorStr}
                                 </div>
                             `;
                         }
@@ -1014,10 +1031,10 @@
                 const userPerm = perms.find(p => p.email === email) || { roles: [] };
                 
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600"><i class="fa-solid fa-shield-halved mr-2"></i> ${email ? 'Editar' : 'Novo'} Acesso</h2>
                     </div>
-                    <form id="form-permission" class="p-6 space-y-4 text-left">
+                    <form id="form-permission" class="p-6 space-y-4 text-left overflow-y-auto custom-scrollbar flex-1">
                         <div>
                             <label class="block text-xs font-bold text-stone-500 uppercase mb-1">E-mail do Usuário</label>
                             <input type="email" id="perm_email" value="${email}" ${email ? 'readonly' : 'required'} class="w-full p-3 ${email ? 'bg-stone-100 text-stone-500' : 'bg-stone-50'} border border-stone-300 rounded-lg outline-none focus:border-yellow-500 text-sm">
@@ -1053,10 +1070,10 @@
 
             showImportModal: () => {
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600">Importar Planilha</h2>
                     </div>
-                    <div class="p-6 space-y-4">
+                    <div class="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                         <div class="bg-yellow-50 border border-yellow-200 p-3 rounded text-xs text-yellow-800">
                             <strong>Colunas necessárias:</strong> Nome, Setor, Função/Cargo (Líder/Liderado), Valor Base.
                         </div>
@@ -1074,10 +1091,10 @@
                 const emp = id && id !== 'null' ? state.employees.find(e => e.id === id) : {};
                 const sectorOpts = state.sectors.map(s => `<option value="${s.id}" ${emp.sectorId === s.id ? 'selected' : ''}>${s.name}</option>`).join('');
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600">${emp.id ? 'Editar' : 'Novo'} Colaborador</h2>
                     </div>
-                    <form id="form-employee" class="p-6 space-y-4">
+                    <form id="form-employee" class="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                         <input type="hidden" id="emp_id" value="${emp.id || ''}">
                         <div>
                             <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Nome Completo</label>
@@ -1113,10 +1130,10 @@
             showSectorForm: (id = null) => {
                 const sec = id && id !== 'null' ? state.sectors.find(s => s.id === id) : {};
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600">${sec.id ? 'Editar' : 'Novo'} Setor</h2>
                     </div>
-                    <form id="form-sector" class="p-6 space-y-4">
+                    <form id="form-sector" class="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                         <input type="hidden" id="sec_id" value="${sec.id || ''}">
                         <div>
                             <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Nome</label>
@@ -1144,10 +1161,10 @@
                 const rule = id && id !== 'null' ? state.rules.find(r => r.id === id) : {};
                 const pctVal = rule.pct !== undefined ? (rule.pct * 100).toFixed(2) : '';
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600">${rule.id ? 'Editar' : 'Nova'} Regra</h2>
                     </div>
-                    <form id="form-rule" class="p-6 space-y-4">
+                    <form id="form-rule" class="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                         <input type="hidden" id="rule_id" value="${rule.id || ''}">
                         <div>
                             <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Critério</label>
@@ -1180,6 +1197,7 @@
             },
             
             showProrationForm: () => {
+                // Utilizando a ordenação e formatação seguras.
                 let filteredEmployees = [...state.employees].sort((a,b) => (a.name||'').localeCompare(b.name||''));
                 
                 const empOpts = filteredEmployees.map(e => {
@@ -1189,10 +1207,10 @@
                 
                 const currentMonth = window.app.getMonthId(new Date());
                 window.app.openModal(`
-                    <div class="p-4 border-b border-stone-200">
+                    <div class="p-4 border-b border-stone-200 shrink-0">
                         <h2 class="text-lg font-bold text-yellow-600"><i class="fa-solid fa-calendar-day mr-2"></i>Férias / Admissão / Demissão</h2>
                     </div>
-                    <form id="form-proration" class="p-6 space-y-4">
+                    <form id="form-proration" class="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
                         <div class="space-y-2">
                             <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Colaborador</label>
                             <div class="relative">
@@ -1248,7 +1266,7 @@
                 setTimeout(() => document.getElementById('pro_month')?.dispatchEvent(new Event('input', { bubbles: true })), 100);
             },
             
-            // VIEWS
+            // VIEWS (Estilo Paisagem / Responsivo Wide)
             views: {
                 dashboard: () => {
                     const monthId = window.app.getMonthId(new Date());
@@ -1298,7 +1316,7 @@
                         menuHtml += `<button data-nav="lancamentos" class="w-full p-4 rounded-xl flex items-center justify-between bg-white border border-stone-200 shadow-sm hover:border-yellow-500 active:scale-95 transition-all">
                             <div class="flex items-center gap-4">
                                 <div class="h-10 w-10 rounded-full bg-stone-100 text-stone-500 flex items-center justify-center text-lg"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                                <div class="text-left"><p class="font-bold text-stone-800">Ocorrências</p><p class="text-xs text-stone-500">Registrar faltas e erros</p></div>
+                                <div class="text-left"><p class="font-bold text-stone-800">Ocorrências</p><p class="text-xs text-stone-500">Registar faltas e erros</p></div>
                             </div>
                             <span class="text-stone-400"><i class="fa-solid fa-chevron-right"></i></span>
                         </button>`;
@@ -1334,7 +1352,7 @@
                         menuHtml += `<button data-nav="relatorios" class="w-full p-4 rounded-xl flex items-center justify-between bg-yellow-50 border border-yellow-200 shadow-sm hover:border-yellow-500 active:scale-95 transition-all md:col-span-2 lg:col-span-2">
                             <div class="flex items-center gap-4">
                                 <div class="h-10 w-10 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center text-lg"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-                                <div class="text-left"><p class="font-bold text-yellow-800">Relatórios</p><p class="text-xs text-yellow-600">Acompanhar valores e erros</p></div>
+                                <div class="text-left"><p class="font-bold text-yellow-800">Relatórios</p><p class="text-xs text-yellow-600">Exportar PDFs para Dept. Pessoal</p></div>
                             </div>
                             <span class="text-yellow-500"><i class="fa-solid fa-chevron-right"></i></span>
                         </button>`;
@@ -1343,7 +1361,7 @@
                         menuHtml += `<button data-nav="configuracoes" class="w-full p-4 rounded-xl flex items-center justify-between bg-stone-200/50 border border-stone-200 shadow-sm active:scale-95 transition-all">
                             <div class="flex items-center gap-4">
                                 <div class="h-8 w-8 rounded-full bg-stone-300 text-stone-600 flex items-center justify-center"><i class="fa-solid fa-cog"></i></div>
-                                <div class="text-left"><p class="font-bold text-stone-700 text-sm">Configurações</p></div>
+                                <div class="text-left"><p class="font-bold text-stone-700 text-sm">Definições</p></div>
                             </div>
                         </button>`;
                     }
@@ -2195,6 +2213,7 @@
                     const type = document.getElementById('del_occ_type').value;
                     const reason = document.getElementById('del_occ_reason').value;
                     const userEmail = state.user?.email || 'Visitante';
+                    const userName = state.user?.displayName || state.user?.email || 'Visitante';
                     
                     const col = type === 'hygiene' ? 'hygiene_checks' : 'logs';
                     
@@ -2202,7 +2221,8 @@
                         await setDoc(doc(db, `artifacts/${appId}/public/data/${col}`, id), { 
                             deleted: true, 
                             deleteReason: reason, 
-                            deletedBy: userEmail, 
+                            deletedBy: userName,
+                            deletedByEmail: userEmail,
                             deletedAt: Date.now() 
                         }, { merge: true });
                     }
@@ -2279,6 +2299,7 @@
 
                     const monthId = window.app.getMonthId(new Date(date + 'T12:00:00'));
                     const userEmail = state.user?.email || 'Visitante';
+                    const userName = state.user?.displayName || state.user?.email || 'Visitante';
 
                     if(confirm(`Aplicar penalidade para ${checkedBoxes.length} colaborador(es) selecionado(s)?`)) {
                         if(db) {
@@ -2293,7 +2314,8 @@
                                     monthId, 
                                     timestamp: Date.now(), 
                                     obs: safeObs,
-                                    registeredBy: userEmail
+                                    registeredBy: userName,
+                                    registeredByEmail: userEmail
                                 });
                             });
                             await Promise.all(promises);
@@ -2330,10 +2352,11 @@
                 const isChecked = e.target.checked;
                 const id = `${date}_${empId}`;
                 const userEmail = state.user?.email || 'Visitante';
+                const userName = state.user?.displayName || state.user?.email || 'Visitante';
                 
                 if (isChecked) {
                     const monthId = window.app.getMonthId(new Date(date + 'T12:00:00'));
-                    if(db) await setDoc(doc(db, `artifacts/${appId}/public/data/hygiene_checks`, id), { employeeId: empId, date, monthId, timestamp: Date.now(), obs: '', registeredBy: userEmail });
+                    if(db) await setDoc(doc(db, `artifacts/${appId}/public/data/hygiene_checks`, id), { employeeId: empId, date, monthId, timestamp: Date.now(), obs: '', registeredBy: userName, registeredByEmail: userEmail });
                 } else {
                     if(db) await deleteDoc(doc(db, `artifacts/${appId}/public/data/hygiene_checks`, id));
                 }
