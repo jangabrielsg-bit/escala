@@ -377,7 +377,7 @@
                     higiene: roles.includes('admin') || roles.includes('qualidade'),
                     proporcionais: roles.includes('admin') || roles.includes('rh'),
                     indicadores: roles.includes('admin') || roles.includes('rh') || roles.includes('qualidade') || roles.includes('producao'),
-                    relatorios: roles.includes('admin') || roles.includes('rh'),
+                    relatorios: roles.includes('admin') || roles.includes('rh') || roles.includes('producao'),
                     configuracoes: roles.includes('admin')
                 };
 
@@ -485,6 +485,7 @@
                 if (prevM === 0) { prevM = 12; prevY -= 1; }
                 const prevMonthId = `${prevY}-${String(prevM).padStart(2, '0')}`;
 
+                // Histórico e Ocorrências
                 const currLogs = state.logs.filter(l => l.monthId === monthId && !l.deleted);
                 const currHyg = state.hygieneChecks.filter(h => window.app.getSafeMonthId(h) === monthId && !h.deleted);
                 const prevLogs = state.logs.filter(l => l.monthId === prevMonthId && !l.deleted);
@@ -493,6 +494,7 @@
                 const currTotal = currLogs.length + currHyg.length;
                 const prevTotal = prevLogs.length + prevHyg.length;
 
+                // Setores que Melhoraram / Pioraram
                 const currSecCounts = {};
                 const prevSecCounts = {};
                 state.sectors.forEach(s => { currSecCounts[s.id] = 0; prevSecCounts[s.id] = 0; });
@@ -518,6 +520,7 @@
                     else if (diff > 0) worsenedSectors.push({ name: s.name, diff, curr: currSecCounts[s.id], prev: prevSecCounts[s.id] });
                 });
 
+                // Regras Mais e Menos Quebradas no mês ATUAL (Desconsiderando Zerar Gratificação)
                 const ruleCounts = {};
                 state.rules.forEach(r => ruleCounts[r.id] = { name: r.name, count: 0 });
                 
@@ -534,6 +537,7 @@
                 const mostBroken = activeRules.length > 0 ? activeRules[0] : null;
                 const leastBroken = activeRules.length > 0 ? activeRules[activeRules.length - 1] : null;
 
+                // Renderização
                 let totalStatusHtml = '';
                 if (currTotal < prevTotal) {
                     totalStatusHtml = `<span class="text-green-600 font-bold"><i class="fa-solid fa-arrow-trend-down"></i> Melhorou (${currTotal} vs ${prevTotal})</span>`;
@@ -1200,27 +1204,48 @@
                                 ${empOpts}
                             </select>
                         </div>
+                        
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Mês Ref.</label>
-                                <input type="month" id="pro_month" value="${currentMonth}" required class="w-full p-3 bg-stone-50 border border-stone-300 rounded-lg outline-none focus:border-yellow-500 text-sm">
+                                <input type="month" id="pro_month" value="${currentMonth}" required class="w-full p-3 bg-stone-50 border border-stone-300 rounded-lg outline-none focus:border-yellow-500 text-sm font-bold">
                             </div>
                             <div>
-                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Data Entrada/Retorno</label>
-                                <input type="date" id="pro_entry_date" required class="w-full p-3 bg-stone-50 border border-stone-300 rounded-lg outline-none focus:border-yellow-500 text-sm">
+                                <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Total Dias no Mês</label>
+                                <input type="number" id="pro_total" value="30" readonly class="w-full p-3 bg-stone-200 border border-stone-300 rounded-lg outline-none text-sm font-bold text-stone-500 cursor-not-allowed">
                             </div>
                         </div>
-                        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-center">
-                            <p class="text-xs text-yellow-800 font-bold uppercase mb-1">Dias a Receber no Mês</p>
-                            <p class="text-lg font-black text-yellow-600" id="pro_calc_preview">--</p>
+
+                        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200 mt-2">
+                            <label class="block text-xs font-bold text-yellow-800 uppercase mb-2"><i class="fa-solid fa-calculator mr-1"></i> Calculadora de Período (Opcional)</label>
+                            <div class="flex gap-2 items-center">
+                                <div class="flex-1">
+                                    <span class="text-[10px] text-stone-500 block mb-1 font-bold uppercase">Trabalhou De:</span>
+                                    <input type="date" id="pro_start_date" class="w-full p-2 bg-white border border-stone-300 rounded outline-none focus:border-yellow-500 text-xs">
+                                </div>
+                                <span class="text-stone-400 mt-4"><i class="fa-solid fa-arrow-right"></i></span>
+                                <div class="flex-1">
+                                    <span class="text-[10px] text-stone-500 block mb-1 font-bold uppercase">Trabalhou Até:</span>
+                                    <input type="date" id="pro_end_date" class="w-full p-2 bg-white border border-stone-300 rounded outline-none focus:border-yellow-500 text-xs">
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-yellow-700 mt-2 leading-tight">Preencha as datas acima para calcular os dias automaticamente, ou digite os dias diretamente abaixo se for um período quebrado.</p>
+                        </div>
+                        
+                        <div class="mt-2 text-center p-4 border border-stone-200 rounded-lg bg-white shadow-sm">
+                            <label class="block text-sm font-black text-stone-700 uppercase mb-2">Dias Efetivamente Trabalhados</label>
+                            <input type="number" min="0" max="31" id="pro_days" required class="w-1/2 mx-auto text-center p-3 border-2 border-yellow-400 rounded-lg outline-none focus:border-yellow-600 text-2xl font-black text-yellow-600">
                         </div>
                         
                         <div class="flex gap-2 pt-2">
-                            <button type="button" data-action="closeModal" class="flex-1 py-3 border border-stone-300 rounded-lg font-bold text-stone-600">Cancelar</button>
-                            <button type="submit" class="flex-1 py-3 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600">Salvar</button>
+                            <button type="button" data-action="closeModal" class="flex-1 py-3 border border-stone-300 rounded-lg font-bold text-stone-600 hover:bg-stone-50 transition-colors">Cancelar</button>
+                            <button type="submit" class="flex-1 py-3 bg-yellow-500 text-white rounded-lg font-bold hover:bg-yellow-600 transition-colors">Salvar Registro</button>
                         </div>
                     </form>
                 `);
+                
+                // Dispara o cálculo inicial
+                document.getElementById('pro_month')?.dispatchEvent(new Event('change', { bubbles: true }));
             },
             
             // VIEWS
@@ -1305,11 +1330,11 @@
                             <span class="text-blue-500"><i class="fa-solid fa-chevron-right"></i></span>
                         </button>`;
                     }
-                    if (isAdmin || isRh) {
+                    if (isAdmin || isRh || isProducao) {
                         menuHtml += `<button data-nav="relatorios" class="w-full p-4 rounded-xl flex items-center justify-between bg-yellow-50 border border-yellow-200 shadow-sm hover:border-yellow-500 active:scale-95 transition-all md:col-span-2 lg:col-span-2">
                             <div class="flex items-center gap-4">
                                 <div class="h-10 w-10 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center text-lg"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-                                <div class="text-left"><p class="font-bold text-yellow-800">Relatórios</p><p class="text-xs text-yellow-600">Exportar PDFs para Dept. Pessoal</p></div>
+                                <div class="text-left"><p class="font-bold text-yellow-800">Relatórios</p><p class="text-xs text-yellow-600">Acompanhar valores e erros</p></div>
                             </div>
                             <span class="text-yellow-500"><i class="fa-solid fa-chevron-right"></i></span>
                         </button>`;
@@ -1538,17 +1563,28 @@
                     } else {
                         const sectorOpts = state.sectors.sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
                         
+                        // FILTRO DE REGRAS BASEADO NO PERFIL
                         const roles = window.app.getUserRoles();
-                        const allowedCategories = [];
-                        if (roles.includes('admin')) allowedCategories.push('qualidade', 'producao', 'rh');
-                        else {
-                            if (roles.includes('qualidade')) allowedCategories.push('qualidade');
-                            if (roles.includes('producao')) allowedCategories.push('producao');
-                            if (roles.includes('rh')) allowedCategories.push('rh');
+                        let allowedRuleIds = [];
+                        if (roles.includes('admin')) {
+                            allowedRuleIds = state.rules.map(r => r.id);
+                        } else {
+                            if (roles.includes('rh')) allowedRuleIds.push('pontualidade');
+                            if (roles.includes('producao')) allowedRuleIds.push('produtividade', 'pontualidade', 'procedimentos');
+                            if (roles.includes('qualidade')) {
+                                state.rules.forEach(r => { if (r.category === 'qualidade') allowedRuleIds.push(r.id) });
+                                allowedRuleIds.push('procedimentos', 'qualidade', 'auditoria', 'higiene');
+                            }
+                            // Permite também categorias adicionais criadas pelos usuários, se o papel permitir
+                            state.rules.forEach(r => {
+                                if (roles.includes(r.category) && !allowedRuleIds.includes(r.id)) {
+                                    allowedRuleIds.push(r.id);
+                                }
+                            });
                         }
 
                         const ruleOpts = state.rules
-                            .filter(r => r.id !== 'higiene' && allowedCategories.includes(r.category || 'qualidade'))
+                            .filter(r => r.id !== 'higiene' && allowedRuleIds.includes(r.id))
                             .map(r => `<option value="${r.id}">${r.name} (-${window.app.formatPct(r.pct)})</option>`)
                             .join('');
 
@@ -2220,22 +2256,10 @@
                 if (formId === 'form-proration') {
                     const empId = document.getElementById('pro_emp').value;
                     const monthId = document.getElementById('pro_month').value;
-                    const entryDate = document.getElementById('pro_entry_date').value;
+                    const daysWorked = Number(document.getElementById('pro_days').value);
+                    const totalDays = Number(document.getElementById('pro_total').value);
                     
-                    if(!empId || !monthId || !entryDate) return window.app.toast("Preencha os campos obrigatórios.", "error");
-
-                    const [year, month] = monthId.split('-');
-                    const totalDays = new Date(year, month, 0).getDate();
-                    const entry = new Date(entryDate + 'T12:00:00');
-                    const refStart = new Date(year, month - 1, 1);
-                    const refEnd = new Date(year, month, 0);
-                    
-                    let daysWorked = totalDays;
-                    if (entry > refEnd) {
-                        daysWorked = 0;
-                    } else if (entry >= refStart) {
-                        daysWorked = totalDays - entry.getDate() + 1;
-                    }
+                    if(!empId || !monthId || isNaN(daysWorked) || !totalDays) return window.app.toast("Preencha os campos obrigatórios.", "error");
 
                     const id = `${empId}_${monthId}`;
                     if(db) await setDoc(doc(db, `artifacts/${appId}/public/data/prorations`, id), { employeeId: empId, monthId, daysWorked, totalDays });
@@ -2355,23 +2379,38 @@
                 });
             }
             
-            if (e.target.id === 'pro_entry_date' || e.target.id === 'pro_month') {
+            if (e.target.id === 'pro_month' || e.target.id === 'pro_start_date' || e.target.id === 'pro_end_date') {
                 const monthVal = document.getElementById('pro_month')?.value;
-                const dateVal = document.getElementById('pro_entry_date')?.value;
-                const preview = document.getElementById('pro_calc_preview');
+                const startVal = document.getElementById('pro_start_date')?.value;
+                const endVal = document.getElementById('pro_end_date')?.value;
+                const daysInput = document.getElementById('pro_days');
+                const totalInput = document.getElementById('pro_total');
                 
-                if (monthVal && dateVal && preview) {
+                if (monthVal && totalInput) {
                     const [year, month] = monthVal.split('-');
                     const totalDays = new Date(year, month, 0).getDate();
-                    const entry = new Date(dateVal + 'T12:00:00');
-                    const refStart = new Date(year, month - 1, 1);
-                    const refEnd = new Date(year, month, 0);
+                    totalInput.value = totalDays;
                     
-                    let days = totalDays;
-                    if (entry > refEnd) days = 0;
-                    else if (entry >= refStart) days = totalDays - entry.getDate() + 1;
-                    
-                    preview.innerText = `${days} de ${totalDays} dias`;
+                    if (daysInput) daysInput.max = totalDays;
+
+                    if (startVal || endVal) {
+                        let dStart = startVal ? new Date(startVal + 'T12:00:00') : new Date(year, month - 1, 1, 12);
+                        let dEnd = endVal ? new Date(endVal + 'T12:00:00') : new Date(year, month, 0, 12);
+                        
+                        const minDate = new Date(year, month - 1, 1, 12);
+                        const maxDate = new Date(year, month, 0, 12);
+                        
+                        if (dStart < minDate) dStart = minDate;
+                        if (dEnd > maxDate) dEnd = maxDate;
+                        
+                        if (dEnd >= dStart) {
+                            const diffTime = Math.abs(dEnd - dStart);
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                            if (daysInput) daysInput.value = diffDays;
+                        } else {
+                            if (daysInput) daysInput.value = 0;
+                        }
+                    }
                 }
             }
         });
