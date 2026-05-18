@@ -15,8 +15,16 @@
         
         /* Estilos de Impressão */
         @media print {
-            /* Força a folha para o modo Paisagem (ideal para tabelas de 31 dias) */
-            @page { margin: 1cm; size: landscape; }
+            /* Regra global de margem */
+            @page { margin: 1cm; }
+            
+            /* Define tamanhos específicos para cada tipo de folha */
+            @page landscape-page { size: landscape; margin: 1cm; }
+            @page portrait-page { size: portrait; margin: 1cm; }
+            
+            /* Classes que aplicam a orientação correta à página atual */
+            .landscape-page { page: landscape-page; }
+            .portrait-page { page: portrait-page; }
             
             body, html { background-color: white; font-size: 10pt; font-family: Arial, sans-serif; height: auto !important; overflow: visible !important; display: block !important; }
             .no-print { display: none !important; }
@@ -503,7 +511,7 @@
             alert(`Configurações de ${setor} salvas!`);
         }
 
-        // --- LÓGICA DE GERAÇÃO HTML (LARGURAS FIXAS / TABLE-LAYOUT) ---
+        // --- LÓGICA DE GERAÇÃO HTML (LARGURAS FIXAS / TABLE-LAYOUT E PAGES NOMEADAS) ---
         function getDadosData() {
             const dateVal = document.getElementById('global-month-select').value;
             let ano = dateVal ? dateVal.split('-')[0] : new Date().getFullYear();
@@ -584,7 +592,7 @@
         // --- RENDERIZADORES COM LARGURA EXATA (TABLE-LAYOUT: FIXED) ---
         function renderHigienizacao(setor, mesAno, dias, listaHigienizacao) {
             let html = `
-                <div>
+                <div class="landscape-page">
                     <div class="flex justify-between font-bold text-sm mb-1">
                         <div>CONTROLE DE QUALIDADE</div>
                         <div>POP 1 ANEXO 1</div>
@@ -614,8 +622,8 @@
         }
 
         function renderTemperatura(setor, mesAno, dias, listaTemperatura) {
-            if(listaTemperatura.length === 0) return `<div class="text-center py-10 font-bold">Planilha de Temperatura: Sem equipamentos cadastrados em ${setor}.</div>`;
-            let html = `<div>`;
+            if(listaTemperatura.length === 0) return `<div class="text-center py-10 font-bold portrait-page">Planilha de Temperatura: Sem equipamentos cadastrados em ${setor}.</div>`;
+            let html = `<div class="portrait-page">`;
             for (let idx = 0; idx < listaTemperatura.length; idx += 2) {
                 const eq1 = listaTemperatura[idx];
                 const eq2 = listaTemperatura[idx + 1];
@@ -656,7 +664,7 @@
 
         function renderPragas(setor, dias, listaPragas) {
             let html = `
-                <div>
+                <div class="landscape-page">
                     <div class="text-center font-bold text-base mb-6 uppercase">Planilha de Monitoramento Ocorrência de Pragas - ${setor}</div>
                     <table class="w-full" style="table-layout: fixed;">
                         <thead>
