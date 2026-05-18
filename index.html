@@ -13,6 +13,12 @@
         body { font-family: 'Roboto', sans-serif; background-color: #f4f7f6; color: #333; }
         .font-title { font-family: 'Poppins', sans-serif; }
         
+        /* Regras de Quebra de Página na Tela (Preview) */
+        @media screen {
+            .print-section { margin-bottom: 2rem; border-bottom: 2px dashed #cbd5e1; padding-bottom: 2rem; }
+            .print-section:last-child { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+        }
+
         /* Estilos de Impressão */
         @media print {
             /* Regra global de margem */
@@ -26,11 +32,17 @@
             .landscape-page { page: landscape-page; }
             .portrait-page { page: portrait-page; }
             
-            body, html { background-color: white; font-size: 10pt; font-family: Arial, sans-serif; height: auto !important; overflow: visible !important; display: block !important; }
+            /* Correção para evitar que o UI do app apareça e cause folhas em branco */
+            body, html { background-color: white !important; font-size: 10pt; font-family: Arial, sans-serif; height: auto !important; width: 100% !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; display: block !important; }
+            
             .no-print { display: none !important; }
-            .print-only { display: block !important; }
+            .print-only { display: block !important; width: 100%; }
             .print-area { width: 100%; max-width: none !important; min-height: 0 !important; margin: 0; padding: 0; box-shadow: none !important; }
             
+            /* Quebra de página inteligente (Evita folhas em branco extras) */
+            .print-section { page-break-after: always; break-after: page; }
+            .print-section:last-child { page-break-after: auto !important; break-after: auto !important; }
+
             /* table-layout fixed impede que os quadrados se deformem baseado no tamanho do texto */
             table { width: 100%; border-collapse: collapse; page-break-inside: auto; table-layout: fixed !important; }
             tr { page-break-inside: avoid; page-break-after: auto; }
@@ -49,7 +61,6 @@
             th.text-left, td.text-left { text-align: left; padding-left: 4px !important; }
             
             .bg-gray-200, .bg-gray-100 { background-color: transparent !important; }
-            .page-break { page-break-before: always; }
         }
 
         .print-only { display: none; }
@@ -112,11 +123,11 @@
         </div>
     </aside>
 
-    <!-- ÁREA PRINCIPAL -->
-    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-[#f4f7f6]">
+    <!-- ÁREA PRINCIPAL - Adicionado no-print aqui para corrigir o bug de sobreposição -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-[#f4f7f6] no-print">
         
         <!-- Topbar Global -->
-        <header class="bg-white shadow-sm border-b border-slate-200 px-8 py-4 flex justify-between items-center no-print z-10">
+        <header class="bg-white shadow-sm border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10">
             <h2 class="text-xl font-bold text-slate-800 font-title" id="topbar-title">Painel de Controle</h2>
             
             <div class="flex items-center gap-4">
@@ -559,23 +570,18 @@
             }
 
             const dt = getDadosData();
-            if(!confirm(`Deseja gerar a impressão completa de TODOS os setores para o mês de ${dt.mesAno}?\n\nAs tabelas foram configuradas para usar larguras exatas em porcentagem, garantindo quadrados uniformes.`)) {
+            if(!confirm(`Deseja gerar a impressão completa de TODOS os setores para o mês de ${dt.mesAno}?`)) {
                 return;
             }
 
             let htmlLote = '';
             const tipos = ['temperatura', 'higienizacao', 'pragas'];
 
-            currentState.setores.forEach((setor, indexSetor) => {
-                tipos.forEach((tipo, indexTipo) => {
+            currentState.setores.forEach((setor) => {
+                tipos.forEach((tipo) => {
                     const blockHtml = gerarHTMLPlanilha(tipo, setor, dt);
                     if (blockHtml.trim() !== '') {
-                        htmlLote += blockHtml;
-                        const isLastSector = (indexSetor === currentState.setores.length - 1);
-                        const isLastType = (indexTipo === tipos.length - 1);
-                        if (!(isLastSector && isLastType)) {
-                            htmlLote += `<div class="page-break"></div>`;
-                        }
+                        htmlLote += blockHtml; // As quebras agora são automáticas pela classe .print-section
                     }
                 });
             });
@@ -592,7 +598,7 @@
         // --- RENDERIZADORES COM LARGURA EXATA (TABLE-LAYOUT: FIXED) ---
         function renderHigienizacao(setor, mesAno, dias, listaHigienizacao) {
             let html = `
-                <div class="landscape-page">
+                <div class="landscape-page print-section">
                     <div class="flex justify-between font-bold text-sm mb-1">
                         <div>CONTROLE DE QUALIDADE</div>
                         <div>POP 1 ANEXO 1</div>
@@ -613,7 +619,6 @@
                 const nome = parts[0] ? parts[0].trim() : item;
                 const freq = parts[1] ? parts[1].trim() : '';
                 html += `<tr><td class="text-left font-bold text-[10px]">${nome}</td><td class="text-[10px]">${freq}</td>`;
-                // height fixo de 22px força a célula a se parecer com um quadrado
                 for (let i = 1; i <= dias; i++) { html += `<td style="height: 22px;"></td>`; }
                 html += `</tr>`;
             });
@@ -622,13 +627,15 @@
         }
 
         function renderTemperatura(setor, mesAno, dias, listaTemperatura) {
-            if(listaTemperatura.length === 0) return `<div class="text-center py-10 font-bold portrait-page">Planilha de Temperatura: Sem equipamentos cadastrados em ${setor}.</div>`;
-            let html = `<div class="portrait-page">`;
+            if(listaTemperatura.length === 0) return `<div class="text-center py-10 font-bold portrait-page print-section">Planilha de Temperatura: Sem equipamentos cadastrados em ${setor}.</div>`;
+            
+            let html = ``;
             for (let idx = 0; idx < listaTemperatura.length; idx += 2) {
                 const eq1 = listaTemperatura[idx];
                 const eq2 = listaTemperatura[idx + 1];
-                if (idx > 0) html += `<div class="page-break"></div>`;
+                
                 html += `
+                <div class="portrait-page print-section">
                     <div class="text-center font-bold text-base mb-6 uppercase">Controle de temperatura dos equipamentos - ${setor} - Eusébio</div>
                     <div class="text-[11px] mb-4 font-bold leading-relaxed">TEMPERATURA RECOMENDADA:<br>Freezer Congelado &nbsp;&nbsp;&nbsp; - 22°C a 0°C<br>Freezer Resfriado &nbsp;&nbsp;&nbsp; 0°C a 10°C</div>
                     <div class="font-bold text-sm mb-4">Setor: ${setor}<br>Período: ${mesAno}</div>
@@ -656,15 +663,15 @@
                     <div class="mt-8 text-xs font-bold leading-loose">
                         Assinatura de conferencia da planilha: ___________________________<br>
                         Data de conferencia da planilha: ________________________________
-                    </div>`;
+                    </div>
+                </div>`;
             }
-            html += `</div>`;
             return html;
         }
 
         function renderPragas(setor, dias, listaPragas) {
             let html = `
-                <div class="landscape-page">
+                <div class="landscape-page print-section">
                     <div class="text-center font-bold text-base mb-6 uppercase">Planilha de Monitoramento Ocorrência de Pragas - ${setor}</div>
                     <table class="w-full" style="table-layout: fixed;">
                         <thead>
