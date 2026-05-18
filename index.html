@@ -15,19 +15,30 @@
         
         /* Estilos de Impressão */
         @media print {
-            @page { margin: 1cm; }
+            /* Força a folha para o modo Paisagem (ideal para tabelas de 31 dias) */
+            @page { margin: 1cm; size: landscape; }
+            
             body, html { background-color: white; font-size: 10pt; font-family: Arial, sans-serif; height: auto !important; overflow: visible !important; display: block !important; }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             .print-area { width: 100%; max-width: none !important; min-height: 0 !important; margin: 0; padding: 0; box-shadow: none !important; }
             
-            table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+            /* table-layout fixed impede que os quadrados se deformem baseado no tamanho do texto */
+            table { width: 100%; border-collapse: collapse; page-break-inside: auto; table-layout: fixed !important; }
             tr { page-break-inside: avoid; page-break-after: auto; }
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             
-            th, td { border: 1px solid #000 !important; padding: 3px !important; text-align: center; font-size: 9pt; color: #000; }
-            th.text-left, td.text-left { text-align: left; }
+            th, td { 
+                border: 1px solid #000 !important; 
+                padding: 3px 1px !important; 
+                text-align: center; 
+                font-size: 8.5pt; 
+                color: #000; 
+                word-wrap: break-word; 
+                overflow-wrap: break-word; 
+            }
+            th.text-left, td.text-left { text-align: left; padding-left: 4px !important; }
             
             .bg-gray-200, .bg-gray-100 { background-color: transparent !important; }
             .page-break { page-break-before: always; }
@@ -37,9 +48,9 @@
         
         /* Preview visualização */
         .preview-table { font-family: Arial, sans-serif; color: #000; }
-        .preview-table table { border-collapse: collapse; width: 100%; }
-        .preview-table th, .preview-table td { border: 1px solid #000; padding: 4px; text-align: center; font-size: 11px; }
-        .preview-table th.text-left, .preview-table td.text-left { text-align: left; }
+        .preview-table table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        .preview-table th, .preview-table td { border: 1px solid #000; padding: 4px 2px; text-align: center; font-size: 11px; word-wrap: break-word; }
+        .preview-table th.text-left, .preview-table td.text-left { text-align: left; padding-left: 6px; }
         
         /* Efeitos */
         .card-hover { transition: all 0.3s ease; }
@@ -310,15 +321,6 @@
                 const parsed = JSON.parse(saved);
                 currentState.setores = parsed.setores;
                 currentState.dados = parsed.dados;
-            } else {
-                // Tenta importar da V4
-                const oldSaved = localStorage.getItem('cqSystemConfig_v4');
-                if(oldSaved) {
-                    const parsedData = JSON.parse(oldSaved);
-                    currentState.setores = parsedData.setores || Object.keys(parsedData.dados || {});
-                    currentState.dados = parsedData.dados || parsedData;
-                    salvarNoStorage();
-                }
             }
         }
 
@@ -331,11 +333,9 @@
 
         // --- INTERFACE (VIEWS & SIDEBAR) ---
         function changeView(viewId) {
-            // Atualiza Topbar
             const titles = { 'home': 'Dashboard de Setores', 'types': 'Planilhas do Setor', 'preview': 'Visualização de Planilha', 'config': 'Administração do Sistema' };
             document.getElementById('topbar-title').innerText = titles[viewId];
 
-            // Atualiza menu lateral visualmente
             document.querySelectorAll('.sidebar-item').forEach(el => {
                 el.classList.remove('active', 'bg-slate-800', 'text-blue-400', 'border-blue-500');
                 el.classList.add('text-slate-300', 'border-transparent');
@@ -346,7 +346,6 @@
                 activeNav.classList.remove('text-slate-300', 'border-transparent');
             }
 
-            // Oculta tudo e mostra a correta
             document.getElementById('view-home').classList.add('hidden');
             document.getElementById('view-types').classList.add('hidden');
             document.getElementById('view-preview').classList.add('hidden');
@@ -363,9 +362,8 @@
                 }
             }
             
-            // Rola pro topo
             document.getElementById('main-scroll-area').scrollTop = 0;
-            document.getElementById('print-root').innerHTML = ''; // Limpa impressão
+            document.getElementById('print-root').innerHTML = '';
         }
 
         function getIconForSector(sectorName) {
@@ -505,7 +503,7 @@
             alert(`Configurações de ${setor} salvas!`);
         }
 
-        // --- LÓGICA DE GERAÇÃO HTML (FIDELIDADE DOCUMENTOS) ---
+        // --- LÓGICA DE GERAÇÃO HTML (LARGURAS FIXAS / TABLE-LAYOUT) ---
         function getDadosData() {
             const dateVal = document.getElementById('global-month-select').value;
             let ano = dateVal ? dateVal.split('-')[0] : new Date().getFullYear();
@@ -547,14 +545,13 @@
             window.print();
         }
 
-        // --- NOVA FUNÇÃO: IMPRIMIR TODAS AS PLANILHAS EM LOTE ---
         function imprimirTudoEmLote() {
             if(currentState.setores.length === 0) {
                 return alert("Nenhum setor configurado para imprimir.");
             }
 
             const dt = getDadosData();
-            if(!confirm(`Deseja gerar a impressão completa de TODOS os setores para o mês de ${dt.mesAno}?\n\nIsso irá gerar múltiplas páginas contendo as planilhas de Temperatura, Higienização e Pragas de cada setor.`)) {
+            if(!confirm(`Deseja gerar a impressão completa de TODOS os setores para o mês de ${dt.mesAno}?\n\nAs tabelas foram configuradas para usar larguras exatas em porcentagem, garantindo quadrados uniformes.`)) {
                 return;
             }
 
@@ -566,7 +563,6 @@
                     const blockHtml = gerarHTMLPlanilha(tipo, setor, dt);
                     if (blockHtml.trim() !== '') {
                         htmlLote += blockHtml;
-                        // Adiciona quebra de página, exceto no exato último item do último setor
                         const isLastSector = (indexSetor === currentState.setores.length - 1);
                         const isLastType = (indexTipo === tipos.length - 1);
                         if (!(isLastSector && isLastType)) {
@@ -579,37 +575,38 @@
             const printRoot = document.getElementById('print-root');
             printRoot.innerHTML = htmlLote;
             
-            // Pequeno delay para o DOM renderizar o lote antes de abrir a janela
             setTimeout(() => {
                 window.print();
-                printRoot.innerHTML = ''; // Limpa após impressão
+                printRoot.innerHTML = '';
             }, 500);
         }
 
-        // --- RENDERIZADORES HTML ESPECÍFICOS ---
+        // --- RENDERIZADORES COM LARGURA EXATA (TABLE-LAYOUT: FIXED) ---
         function renderHigienizacao(setor, mesAno, dias, listaHigienizacao) {
             let html = `
-                <div style="page: landscape;">
+                <div>
                     <div class="flex justify-between font-bold text-sm mb-1">
                         <div>CONTROLE DE QUALIDADE</div>
                         <div>POP 1 ANEXO 1</div>
                     </div>
                     <div class="text-center font-bold text-sm mb-1">POP 1 – HIGIENIZAÇÃO DE EQUIPAMENTOS E UTENSILIOS</div>
                     <div class="text-center font-bold text-sm mb-3">CRONOGRAMA DE HIGIENIZAÇÃO &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; SETOR: ${setor} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; MÊS/ANO: ${mesAno}</div>
-                    <table class="w-full">
+                    
+                    <table class="w-full" style="table-layout: fixed;">
                         <thead>
                             <tr class="bg-gray-100 font-bold">
-                                <th class="text-left w-56">EQUIPAMENTO</th>
-                                <th class="w-24">FREQUÊNCIA</th>`;
-            for (let i = 1; i <= dias; i++) { html += `<th class="w-5">${i}</th>`; }
+                                <th class="text-left" style="width: 26%;">EQUIPAMENTO</th>
+                                <th style="width: 12%;">FREQUÊNCIA</th>`;
+            for (let i = 1; i <= dias; i++) { html += `<th style="width: 2%;">${i}</th>`; }
             html += `</tr></thead><tbody>`;
 
             listaHigienizacao.forEach(item => {
                 const parts = item.split('|');
                 const nome = parts[0] ? parts[0].trim() : item;
                 const freq = parts[1] ? parts[1].trim() : '';
-                html += `<tr><td class="text-left font-bold text-[10px] h-6">${nome}</td><td class="text-[10px]">${freq}</td>`;
-                for (let i = 1; i <= dias; i++) { html += `<td></td>`; }
+                html += `<tr><td class="text-left font-bold text-[10px]">${nome}</td><td class="text-[10px]">${freq}</td>`;
+                // height fixo de 22px força a célula a se parecer com um quadrado
+                for (let i = 1; i <= dias; i++) { html += `<td style="height: 22px;"></td>`; }
                 html += `</tr>`;
             });
             html += `</tbody></table></div>`;
@@ -630,20 +627,20 @@
                     <div class="flex gap-4">
                         <div class="w-1/2">
                             <div class="font-bold text-sm mb-1">Equipamento: ${eq1}</div>
-                            <table>
-                                <thead><tr class="font-bold"><th class="w-12">DATA</th><th class="w-16">HORA</th><th class="w-16">T°C</th><th>VISTO</th></tr></thead>
+                            <table style="table-layout: fixed;">
+                                <thead><tr class="font-bold"><th style="width: 15%;">DATA</th><th style="width: 20%;">HORA</th><th style="width: 20%;">T°C</th><th style="width: 45%;">VISTO</th></tr></thead>
                                 <tbody>`;
-                for (let i = 1; i <= dias; i++) { html += `<tr><td class="h-5">${i}</td><td></td><td></td><td></td></tr>`; }
+                for (let i = 1; i <= dias; i++) { html += `<tr><td style="height: 22px;">${i}</td><td></td><td></td><td></td></tr>`; }
                 html += `</tbody></table></div>`;
 
                 if (eq2) {
                     html += `
                         <div class="w-1/2">
                             <div class="font-bold text-sm mb-1">Equipamento: ${eq2}</div>
-                            <table>
-                                <thead><tr class="font-bold"><th class="w-12">DATA</th><th class="w-16">HORA</th><th class="w-16">T°C</th><th>VISTO</th></tr></thead>
+                            <table style="table-layout: fixed;">
+                                <thead><tr class="font-bold"><th style="width: 15%;">DATA</th><th style="width: 20%;">HORA</th><th style="width: 20%;">T°C</th><th style="width: 45%;">VISTO</th></tr></thead>
                                 <tbody>`;
-                    for (let i = 1; i <= dias; i++) { html += `<tr><td class="h-5">${i}</td><td></td><td></td><td></td></tr>`; }
+                    for (let i = 1; i <= dias; i++) { html += `<tr><td style="height: 22px;">${i}</td><td></td><td></td><td></td></tr>`; }
                     html += `</tbody></table></div>`;
                 } else { html += `<div class="w-1/2"></div>`; }
                 
@@ -659,20 +656,23 @@
 
         function renderPragas(setor, dias, listaPragas) {
             let html = `
-                <div style="page: landscape;">
+                <div>
                     <div class="text-center font-bold text-base mb-6 uppercase">Planilha de Monitoramento Ocorrência de Pragas - ${setor}</div>
-                    <table>
+                    <table class="w-full" style="table-layout: fixed;">
                         <thead>
-                            <tr class="font-bold"><th rowspan="2" class="text-left w-48 pl-2 align-bottom">PRAGAS</th><th colspan="${dias}">DIAS DO MÊS</th></tr>
+                            <tr class="font-bold">
+                                <th rowspan="2" class="text-left pl-2 align-bottom" style="width: 18%;">PRAGAS</th>
+                                <th colspan="${dias}">DIAS DO MÊS</th>
+                            </tr>
                             <tr class="font-bold">`;
-            for (let i = 1; i <= dias; i++) { html += `<th class="w-5">${i}</th>`; }
+            for (let i = 1; i <= dias; i++) { html += `<th style="width: ${(82/dias).toFixed(2)}%;">${i}</th>`; }
             html += `</tr></thead><tbody>`;
 
             if(listaPragas.length === 0) { html += `<tr><td colspan="${dias + 1}" class="py-4 font-bold">Nenhuma praga configurada para ${setor}.</td></tr>`; }
 
             listaPragas.forEach(praga => {
                 html += `<tr><td class="text-left font-bold pl-2 h-8">${praga}</td>`;
-                for (let i = 1; i <= dias; i++) { html += `<td></td>`; }
+                for (let i = 1; i <= dias; i++) { html += `<td style="height: 24px;"></td>`; }
                 html += `</tr>`;
             });
             html += `</tbody></table></div>`;
